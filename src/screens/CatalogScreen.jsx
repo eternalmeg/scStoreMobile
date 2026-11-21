@@ -1,111 +1,92 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Link } from 'expo-router';
-
-const products = [
-    {
-        id: 'lenovo-legion-pro-5',
-        name: 'Lenovo Legion Pro 5',
-        image: require('../../assets/images/lenovo-legion-pro-5-16-g10-639672.jpg'),
-        price: '1,899.00 €',
-    },
-    {
-        id: 'motorola-razr-50-ultra',
-        name: 'Motorola Razr 50 Ultra',
-        image: require('../../assets/images/motorola-razr-50-ultra-563033.jpg'),
-        price: '799.00 €',
-    },
-    {
-        id: 'msi-katana-15',
-        name: 'MSI Katana 15',
-        image: require('../../assets/images/msi-katana-15-hx-b14w-664985.jpg'),
-        price: '1,299.00 €',
-    },
-    {
-        id: 'msi-meg-vision-x-ai-2',
-        name: 'MSI MEG Vision X AI 2',
-        image: require('../../assets/images/msi-meg-vision-x-ai-2-685991.jpg'),
-        price: '4,499.00 €',
-    },
-];
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { products } from '../data/products';
 
 const categories = ['All', 'Phones', 'Laptops', 'Desktops'];
 
 export default function CatalogScreen() {
     return (
-        <ScrollView
-            style={styles.screen}
-            contentContainerStyle={styles.content}
-            contentInsetAdjustmentBehavior="automatic"
-        >
-            <View style={styles.header}>
-                <View style={styles.headerBrand}>
-                    <Image
-                        source={require('../../assets/images/logo.png')}
-                        style={styles.logo}
-                        resizeMode="contain"
-                        accessibilityLabel="ETM Service logo"
-                    />
-                    <Text style={styles.title} accessibilityRole="header">SC Store</Text>
-                </View>
-                <View style={styles.headerActions}>
-                    <Link href="/profile" style={styles.profileLink}>Profile</Link>
-                    <View
-                        style={styles.cartIcon}
-                        accessible
-                        accessibilityRole="image"
-                        accessibilityLabel="Shopping cart"
-                    >
-                        <View style={styles.cartHandle} />
-                        <View style={styles.cartStem} />
-                        <View style={styles.cartBasket} />
-                        <View style={[styles.cartWheel, { left: 8 }]} />
-                        <View style={[styles.cartWheel, { left: 18 }]} />
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+            <ScrollView
+                style={styles.screen}
+                contentContainerStyle={styles.content}
+                contentInsetAdjustmentBehavior="never"
+            >
+                <View style={styles.header}>
+                    <View style={styles.headerBrand}>
+                        <Image
+                            source={require('../../assets/images/logo.png')}
+                            style={styles.logo}
+                            resizeMode="contain"
+                            accessibilityLabel="ETM Service logo"
+                        />
+                        <Text style={styles.title} accessibilityRole="header">SC Store</Text>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <Link href="/profile" style={styles.profileLink}>Profile</Link>
+                        <Link href="/cart" asChild>
+                            <Pressable
+                                style={styles.cartIcon}
+                                hitSlop={12}
+                                accessibilityRole="button"
+                                accessibilityLabel="Shopping cart"
+                            >
+                                <View style={styles.cartHandle} />
+                                <View style={styles.cartStem} />
+                                <View style={styles.cartBasket} />
+                                <View style={[styles.cartWheel, { left: 8 }]} />
+                                <View style={[styles.cartWheel, { left: 18 }]} />
+                            </Pressable>
+                        </Link>
                     </View>
                 </View>
-            </View>
 
-            <View style={styles.search}>
-                <View style={styles.searchIcon} accessible={false}>
-                    <View style={styles.searchIconHandle} />
-                </View>
-                <Text style={styles.searchText}>Search products</Text>
-            </View>
-
-            <View style={styles.categories}>
-                {categories.map((category) => (
-                    <View
-                        key={category}
-                        style={[styles.category, category === 'All' && styles.activeCategory]}
-                    >
-                        <Text style={[
-                            styles.categoryText,
-                            category === 'All' && styles.activeCategoryText,
-                        ]}>
-                            {category}
-                        </Text>
+                <View style={styles.search}>
+                    <View style={styles.searchIcon} accessible={false}>
+                        <View style={styles.searchIconHandle} />
                     </View>
-                ))}
-            </View>
+                    <Text style={styles.searchText}>Search products</Text>
+                </View>
 
-            <View style={styles.grid}>
-                {products.map((product) => (
-                    <View key={product.id} style={styles.card}>
-                        <View style={styles.imageFrame}>
-                            <Image
-                                source={product.image}
-                                style={styles.productImage}
-                                resizeMode="contain"
-                                accessibilityLabel={product.name}
-                            />
+                <View style={styles.categories}>
+                    {categories.map((category) => (
+                        <View
+                            key={category}
+                            style={[styles.category, category === 'All' && styles.activeCategory]}
+                        >
+                            <Text style={[
+                                styles.categoryText,
+                                category === 'All' && styles.activeCategoryText,
+                            ]}>
+                                {category}
+                            </Text>
                         </View>
-                        <View style={styles.productInfo}>
-                            <Text style={styles.productName}>{product.name}</Text>
-                            <Text style={styles.price}>{product.price}</Text>
-                        </View>
-                    </View>
-                ))}
-            </View>
-        </ScrollView>
+                    ))}
+                </View>
+
+                <View style={styles.grid}>
+                    {products.map((product) => (
+                        <Link key={product.id} href={{ pathname: '/catalog/[productId]', params: { productId: product.id } }} asChild>
+                            <Pressable style={styles.card} accessibilityRole="button" accessibilityLabel={`View ${product.name}`}>
+                                <View style={styles.imageFrame}>
+                                    <Image
+                                        source={product.image}
+                                        style={styles.productImage}
+                                        resizeMode="contain"
+                                        accessibilityLabel={product.name}
+                                    />
+                                </View>
+                                <View style={styles.productInfo}>
+                                    <Text style={styles.productName}>{product.name}</Text>
+                                    <Text style={styles.price}>{product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</Text>
+                                </View>
+                            </Pressable>
+                        </Link>
+                    ))}
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
@@ -113,7 +94,7 @@ const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: '#FFFFFF' },
     content: {
         paddingHorizontal: 16,
-        paddingTop: 40,
+        paddingTop: 16,
         paddingBottom: 48,
     },
     header: {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link, router } from 'expo-router';
 
 const user = {
     firstName: 'Alex',
@@ -13,8 +14,15 @@ export default function EditProfileScreen() {
     const [isPhotoModalVisible, setPhotoModalVisible] = useState(false);
     const closePhotoModal = () => setPhotoModalVisible(false);
 
+    function handleSave() {
+        Keyboard.dismiss();
+        Alert.alert('Demo profile', 'Profile changes are not saved. This form is using static data.', [
+            { text: 'OK', onPress: () => router.dismissTo('/profile') },
+        ]);
+    }
+
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <KeyboardAvoidingView style={styles.keyboardArea} behavior="padding">
                 <ScrollView
                     style={styles.scroll}
@@ -23,7 +31,11 @@ export default function EditProfileScreen() {
                     keyboardDismissMode="on-drag"
                 >
                     <View style={styles.header}>
-                        <Text style={styles.backArrow} accessibilityLabel="Back">←</Text>
+                        <Link href="/profile" dismissTo asChild>
+                            <Pressable accessibilityRole="button" accessibilityLabel="Back to Profile" hitSlop={12}>
+                                <Text style={styles.backArrow}>←</Text>
+                            </Pressable>
+                        </Link>
                         <Text style={styles.headerTitle} accessibilityRole="header">Edit profile</Text>
                     </View>
 
@@ -86,9 +98,9 @@ export default function EditProfileScreen() {
                         </View>
                     </View>
 
-                    <View style={styles.saveButton}>
+                    <Pressable style={styles.saveButton} onPress={handleSave} accessibilityRole="button">
                         <Text style={styles.saveButtonText}>Save changes</Text>
-                    </View>
+                    </Pressable>
                 </ScrollView>
             </KeyboardAvoidingView>
             <Modal
@@ -99,7 +111,7 @@ export default function EditProfileScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <Pressable
-                        style={StyleSheet.absoluteFillObject}
+                        style={StyleSheet.absoluteFill}
                         onPress={closePhotoModal}
                         accessibilityRole="button"
                         accessibilityLabel="Dismiss photo options"

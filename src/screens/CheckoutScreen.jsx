@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link, router } from 'expo-router';
 
 const user = {
     firstName: 'Alex',
@@ -25,8 +26,15 @@ function formatPrice(price) {
 export default function CheckoutScreen() {
     const [paymentMethod, setPaymentMethod] = useState('cash');
 
+    function handlePlaceOrder() {
+        Keyboard.dismiss();
+        Alert.alert('Demo checkout', 'No order or payment is created. The cart is using static data.', [
+            { text: 'OK', onPress: () => router.dismissTo('/cart') },
+        ]);
+    }
+
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <KeyboardAvoidingView style={styles.keyboardArea} behavior="padding">
                 <ScrollView
                     style={styles.scroll}
@@ -35,7 +43,11 @@ export default function CheckoutScreen() {
                     keyboardDismissMode="on-drag"
                 >
                     <View style={styles.header}>
-                        <Text style={styles.backArrow} accessibilityLabel="Back">‹</Text>
+                        <Link href="/cart" dismissTo asChild>
+                            <Pressable accessibilityRole="button" accessibilityLabel="Back to Cart" hitSlop={12}>
+                                <Text style={styles.backArrow}>‹</Text>
+                            </Pressable>
+                        </Link>
                         <Text style={styles.title} accessibilityRole="header">Checkout</Text>
                     </View>
 
@@ -143,9 +155,9 @@ export default function CheckoutScreen() {
                         </View>
                     </View>
 
-                    <View style={styles.placeOrderButton}>
+                    <Pressable style={styles.placeOrderButton} onPress={handlePlaceOrder} accessibilityRole="button">
                         <Text style={styles.placeOrderText}>Place order</Text>
-                    </View>
+                    </Pressable>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>

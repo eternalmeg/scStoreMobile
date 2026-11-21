@@ -1,24 +1,48 @@
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const exampleReview = {
-    user: { firstName: 'Alex', lastName: 'Morgan' },
-    rating: 5,
-    comment: 'Great performance and a comfortable keyboard. Games run smoothly, and the laptop feels solid and well built.',
-    imageUrl: require('../../assets/images/lenovo-legion-pro-5-16-g10-639672.jpg'),
-};
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import { products } from '../data/products';
+import { reviews } from '../data/reviews';
 
 const stars = [1, 2, 3, 4, 5];
 
-export default function ReviewFormScreen({ mode = 'create' }) {
-    const isEditing = mode === 'edit';
-    const [rating, setRating] = useState(isEditing ? exampleReview.rating : 0);
-    const [comment, setComment] = useState(isEditing ? exampleReview.comment : '');
-    const imageUrl = isEditing ? exampleReview.imageUrl : null;
+export default function ReviewFormScreen() {
+    const { productId, reviewId } = useLocalSearchParams();
+    const product = products.find(item => item.id === productId);
+    const review = reviews.find(item => item._id === reviewId && item.productId === productId);
+    const isEditing = Boolean(reviewId);
+    let initialRating = 0;
+    let initialComment = '';
+    let imageUrl = null;
+    if (isEditing && review) {
+        initialRating = review.rating;
+        initialComment = review.comment;
+        imageUrl = review.imageUrl;
+    }
+    const [rating, setRating] = useState(initialRating);
+    const [comment, setComment] = useState(initialComment);
+
+    if (!product || (isEditing && !review)) {
+        return (
+            <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
+                <Text style={styles.headerTitle}>Product or review not found</Text>
+                <Link href="/catalog" dismissTo style={styles.photoButtonText}>Back to Catalog</Link>
+            </SafeAreaView>
+        );
+    }
+
+    const reviewsRoute = { pathname: '/catalog/[productId]/reviews', params: { productId: product.id } };
+
+    function handleSave() {
+        Keyboard.dismiss();
+        Alert.alert('Demo review', 'The review is not saved. The app is using static data.', [
+            { text: 'OK', onPress: () => router.dismissTo(reviewsRoute) },
+        ]);
+    }
 
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <KeyboardAvoidingView style={styles.keyboardArea} behavior="padding">
                 <ScrollView
                     style={styles.scroll}
@@ -27,13 +51,17 @@ export default function ReviewFormScreen({ mode = 'create' }) {
                     keyboardDismissMode="on-drag"
                 >
                     <View style={styles.header}>
-                        <Text style={styles.backArrow} accessibilityLabel="Back">←</Text>
+                        <Link href={reviewsRoute} dismissTo asChild>
+                            <Pressable accessibilityRole="button" accessibilityLabel="Back to Reviews" hitSlop={12}>
+                                <Text style={styles.backArrow}>←</Text>
+                            </Pressable>
+                        </Link>
                         <Text style={styles.headerTitle} accessibilityRole="header">
                             {isEditing ? 'Edit review' : 'Write a review'}
                         </Text>
                     </View>
 
-                    <Text style={styles.productName}>Lenovo Legion Pro 5</Text>
+                    <Text style={styles.productName}>{product.name}</Text>
 
                     <View style={styles.form}>
                         <View>
@@ -89,11 +117,11 @@ export default function ReviewFormScreen({ mode = 'create' }) {
                         </View>
                     </View>
 
-                    <View style={styles.saveButton}>
+                    <Pressable style={styles.saveButton} onPress={handleSave} accessibilityRole="button">
                         <Text style={styles.saveButtonText}>
                             {isEditing ? 'Save changes' : 'Post review'}
                         </Text>
-                    </View>
+                    </Pressable>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>

@@ -1,41 +1,9 @@
 import { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const product = {
-    brand: 'Lenovo',
-    model: 'Legion Pro 5',
-    price: 1899,
-    averageRating: 4,
-    shortDescription: 'A powerful laptop with a spacious display and a comfortable keyboard for gaming, creative projects and everyday work.',
-    description: `Display: 16-inch display
-Refresh rate: 180 Hz
-
-Memory: 32 GB DDR5
-Storage: 1 TB SSD
-Interfaces: 2 x USB-A, 2 x USB-C (DisplayPort: supported), HDMI 2.1, RJ-45 Ethernet, 3.5 mm headphone/microphone combo jack
-Designed for gaming and creative work.`,
-
-    images: [
-        require('../../assets/images/lenovo-legion-pro-5-16-g10-639672.jpg'),
-        require('../../assets/images/lenovoLegion2.webp'),
-        require('../../assets/images/lenovoLegion3.webp'),
-    ],
-};
-
-const reviewAuthor = {
-    firstName: 'Alex',
-    lastName: 'Morgan',
-    avatarUrl: '',
-};
-
-const review = {
-    user: reviewAuthor,
-    rating: 5,
-    createdAt: '2026-11-07',
-    comment: 'Great performance and a comfortable keyboard. Games run smoothly, and the laptop feels solid and well built.',
-    imageUrl: require('../../assets/images/lenovo-legion-pro-5-16-g10-639672.jpg'),
-};
+import { Link, useLocalSearchParams } from 'expo-router';
+import { products } from '../data/products';
+import { reviews } from '../data/reviews';
 
 const stars = [1, 2, 3, 4, 5];
 
@@ -43,16 +11,36 @@ const stars = [1, 2, 3, 4, 5];
 export default function ProductDetailsScreen() {
     const [galleryWidth, setGalleryWidth] = useState(0);
     const [activeImage, setActiveImage] = useState(0);
+    const { productId } = useLocalSearchParams();
+    const product = products.find(item => item.id === productId);
+    if (!product) {
+        return (
+            <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
+                <Text style={styles.headerTitle}>Product not found</Text>
+                <Link href="/catalog" dismissTo style={styles.seeAll}>Back to Catalog</Link>
+            </SafeAreaView>
+        );
+    }
+    const productReviews = reviews.filter(item => item.productId === productId);
+    const review = productReviews[0];
+    let averageRating = 0;
+    if (productReviews.length > 0) {
+        averageRating = productReviews.reduce((sum, item) => sum + item.rating, 0) / productReviews.length;
+    }
     const descriptionLines = (product.description || '')
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
 
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
                 <View style={styles.header}>
-                    <Text style={styles.backArrow} accessibilityLabel="Back">←</Text>
+                    <Link href="/catalog" dismissTo asChild>
+                        <Pressable accessibilityRole="button" accessibilityLabel="Back to Catalog" hitSlop={12}>
+                            <Text style={styles.backArrow}>←</Text>
+                        </Pressable>
+                    </Link>
                     <Text style={styles.headerTitle} accessibilityRole="header">
                         Product details
                     </Text>
@@ -91,7 +79,7 @@ export default function ProductDetailsScreen() {
                                         source={typeof image === 'string' ? { uri: image } : image}
                                         style={styles.productImage}
                                         resizeMode="contain"
-                                        accessibilityLabel={`${product.brand} ${product.model}, image ${index + 1}`}
+                                        accessibilityLabel={`${product.name}, image ${index + 1}`}
                                     />
                                 </View>
                             ))}
@@ -111,7 +99,7 @@ export default function ProductDetailsScreen() {
                 </View>
 
                 <Text style={styles.productName} accessibilityRole="header">
-                    {product.brand} {product.model}
+                    {product.name}
                 </Text>
                 <View style={styles.priceRow}>
                     <Text style={styles.price}>
@@ -123,23 +111,23 @@ export default function ProductDetailsScreen() {
                     <View
                         style={styles.ratingGroup}
                         accessible
-                        accessibilityLabel={`${product.averageRating} out of 5 stars`}
+                        accessibilityLabel={`${averageRating} out of 5 stars`}
                     >
                         <View style={styles.stars}>
                             {stars.map((star) => (
-                                <Text key={star} style={[styles.star, star > product.averageRating && styles.emptyStar]}>
-                                    {star <= product.averageRating ? '★' : '☆'}
+                                <Text key={star} style={[styles.star, star > averageRating && styles.emptyStar]}>
+                                    {star <= averageRating ? '★' : '☆'}
                                 </Text>
                             ))}
                         </View>
-                        <Text style={styles.ratingValue}>({product.averageRating}/5)</Text>
+                        <Text style={styles.ratingValue}>({averageRating}/5)</Text>
                     </View>
                 </View>
                 {product.shortDescription?.trim() ? (
                     <Text style={styles.description}>{product.shortDescription.trim()}</Text>
                 ) : null}
 
-                <View style={styles.specificationsSection}>
+                {descriptionLines.length > 0 && <View style={styles.specificationsSection}>
                     <Text style={[styles.sectionTitle, styles.specificationsTitle]} accessibilityRole="header">
                         Specifications
                     </Text>
@@ -156,15 +144,15 @@ export default function ProductDetailsScreen() {
                             </View>
                         );
                     })}
-                </View>
+                </View>}
 
                 <View style={styles.reviews}>
                     <View style={styles.reviewsHeader}>
                         <Text style={styles.sectionTitle} accessibilityRole="header">Reviews</Text>
-                        <Text style={styles.seeAll}>See all ›</Text>
+                        <Link href={{ pathname: '/catalog/[productId]/reviews', params: { productId: product.id } }} style={styles.seeAll}>See all ›</Link>
                     </View>
 
-                    <View style={styles.reviewRow}>
+                    {review ? <View style={styles.reviewRow}>
                         <View style={styles.reviewAvatar}>
                             {review.user.avatarUrl ? (
                                 <Image
@@ -208,12 +196,14 @@ export default function ProductDetailsScreen() {
                                 </View>
                             )}
                         </View>
-                    </View>
+                    </View> : <Text style={styles.reviewComment}>No reviews yet.</Text>}
                 </View>
 
-                <View style={styles.addToCart}>
-                    <Text style={styles.addToCartText}>Add to cart</Text>
-                </View>
+                <Link href="/cart" asChild>
+                    <Pressable style={styles.addToCart} accessibilityRole="button">
+                        <Text style={styles.addToCartText}>Add to cart</Text>
+                    </Pressable>
+                </Link>
             </ScrollView>
         </SafeAreaView>
     );

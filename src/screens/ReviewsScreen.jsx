@@ -1,42 +1,11 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link, useLocalSearchParams } from 'expo-router';
+import { products } from '../data/products';
+import { reviews } from '../data/reviews';
 
 const currentUserId = 'alex-morgan';
 
-const reviews = [
-    {
-        _id: 'review-alex',
-        user: { _id: 'alex-morgan', firstName: 'Alex', lastName: 'Morgan', avatarUrl: '' },
-        rating: 5,
-        createdAt: '2026-11-07',
-        comment: 'Great performance and a comfortable keyboard. Games run smoothly, and the laptop feels solid and well built.',
-        imageUrl: require('../../assets/images/lenovo-legion-pro-5-16-g10-639672.jpg'),
-    },
-    {
-        _id: 'review-jamie',
-        user: { _id: 'jamie-wilson', firstName: 'Jamie', lastName: 'Wilson', avatarUrl: '' },
-        rating: 4,
-        createdAt: '2026-11-05',
-        comment: 'The display is clear and bright, and the keyboard is comfortable for long work sessions. The fans are noticeable while gaming.',
-        imageUrl: null,
-    },
-    {
-        _id: 'review-taylor',
-        user: { _id: 'taylor-reed', firstName: 'Taylor', lastName: 'Reed', avatarUrl: '' },
-        rating: 3,
-        createdAt: '2026-11-02',
-        comment: 'Good performance for games and creative work. It is a little heavy to carry every day, and I would have liked longer battery life.',
-        imageUrl: null,
-    },
-];
-
-const product = {
-    brand: 'Lenovo',
-    model: 'Legion Pro 5',
-    averageRating: reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length,
-};
-
-const sortedReviews = [...reviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 const stars = [1, 2, 3, 4, 5];
 
 function RatingStars({ rating }) {
@@ -52,26 +21,50 @@ function RatingStars({ rating }) {
 }
 
 export default function ReviewsScreen() {
+    const { productId } = useLocalSearchParams();
+    const product = products.find(item => item.id === productId);
+    if (!product) {
+        return (
+            <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
+                <Text style={styles.headerTitle}>Product not found</Text>
+                <Link href="/catalog" dismissTo style={styles.edit}>Back to Catalog</Link>
+            </SafeAreaView>
+        );
+    }
+    const productReviews = reviews.filter(item => item.productId === productId);
+    const sortedReviews = [...productReviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    let averageRating = 0;
+    if (productReviews.length > 0) {
+        averageRating = productReviews.reduce((sum, review) => sum + review.rating, 0) / productReviews.length;
+    }
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
                 <View style={styles.header}>
-                    <Text style={styles.backArrow} accessibilityLabel="Back">←</Text>
+                    <Link href={{ pathname: '/catalog/[productId]', params: { productId: product.id } }} dismissTo asChild>
+                        <Pressable accessibilityRole="button" accessibilityLabel="Back to product" hitSlop={12}>
+                            <Text style={styles.backArrow}>←</Text>
+                        </Pressable>
+                    </Link>
                     <Text style={styles.headerTitle} accessibilityRole="header">Reviews</Text>
                 </View>
 
                 <Text style={styles.productName} accessibilityRole="header">
-                    {product.brand} {product.model}
+                    {product.name}
                 </Text>
                 <View style={styles.ratingSummary}>
-                    <RatingStars rating={product.averageRating} />
-                    <Text style={styles.averageRating}>{product.averageRating.toFixed(1)} / 5</Text>
-                    <Text style={styles.reviewCount}>{reviews.length} reviews</Text>
+                    <RatingStars rating={averageRating} />
+                    <Text style={styles.averageRating}>{averageRating.toFixed(1)} / 5</Text>
+                    <Text style={styles.reviewCount}>{productReviews.length} reviews</Text>
                 </View>
 
-                <View style={styles.writeButton}>
-                    <Text style={styles.writeButtonText}>Write a review</Text>
-                </View>
+                <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId: product.id } }} asChild>
+                    <Pressable style={styles.writeButton} accessibilityRole="button">
+                        <Text style={styles.writeButtonText}>Write a review</Text>
+                    </Pressable>
+                </Link>
+
+                {productReviews.length === 0 && <Text style={styles.comment}>No reviews yet.</Text>}
 
                 <View>
                     {sortedReviews.map((review) => (
@@ -105,13 +98,13 @@ export default function ReviewsScreen() {
                                             source={typeof review.imageUrl === 'string' ? { uri: review.imageUrl } : review.imageUrl}
                                             style={styles.reviewImage}
                                             resizeMode="contain"
-                                            accessibilityLabel={`${product.brand} ${product.model} review photo`}
+                                            accessibilityLabel={`${product.name} review photo`}
                                         />
                                     </View>
                                 )}
                                 {review.user._id === currentUserId && (
                                     <View style={styles.reviewActions}>
-                                        <Text style={styles.edit}>Edit</Text>
+                                        <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId: product.id, reviewId: review._id } }} style={styles.edit}>Edit</Link>
                                         <Text style={styles.delete}>Delete</Text>
                                     </View>
                                 )}

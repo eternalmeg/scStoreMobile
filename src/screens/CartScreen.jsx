@@ -1,5 +1,6 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 
 const cartItems = [
     {
@@ -29,7 +30,7 @@ function formatPrice(price) {
 
 export default function CartScreen() {
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
                 <Text style={styles.title} accessibilityRole="header">Cart</Text>
 
@@ -77,12 +78,16 @@ export default function CartScreen() {
                         <Text style={styles.totalValue}>{formatPrice(total)}</Text>
                     </View>
                     <View style={styles.actions}>
-                        <View style={styles.checkoutButton}>
-                            <Text style={styles.checkoutText}>Proceed to checkout</Text>
-                        </View>
-                        <View style={styles.continueButton}>
-                            <Text style={styles.continueText}>Continue shopping</Text>
-                        </View>
+                        <Link href="/cart/checkout" asChild>
+                            <Pressable style={styles.checkoutButton} accessibilityRole="button">
+                                <Text style={styles.checkoutText}>Proceed to checkout</Text>
+                            </Pressable>
+                        </Link>
+                        <Link href="/catalog" asChild>
+                            <Pressable style={styles.continueButton} accessibilityRole="button">
+                                <Text style={styles.continueText}>Continue shopping</Text>
+                            </Pressable>
+                        </Link>
                     </View>
                 </View>
             </ScrollView>

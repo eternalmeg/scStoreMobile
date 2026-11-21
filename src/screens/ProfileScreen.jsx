@@ -10,9 +10,9 @@ export default function ProfileScreen() {
     const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}` || user.email[0];
 
     return (
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-                <Link href="/catalog" dismissTo style={styles.backLink}>‹ Catalog</Link>
+                <Link href="/catalog" style={styles.backLink}>‹ Catalog</Link>
                 <Text style={styles.title} accessibilityRole="header">Profile</Text>
 
                 <View style={styles.profileSummary}>
@@ -36,9 +36,11 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={styles.actions}>
-                    <View style={styles.editButton}>
-                        <Text style={styles.editButtonText}>Edit profile</Text>
-                    </View>
+                    <Link href="/profile/edit" asChild>
+                        <Pressable style={styles.editButton} accessibilityRole="button">
+                            <Text style={styles.editButtonText}>Edit profile</Text>
+                        </Pressable>
+                    </Link>
                     <Pressable style={styles.logoutButton} onPress={() => { void logout(); }} accessibilityRole="button">
                         <Text style={styles.logoutButtonText}>Log out</Text>
                     </Pressable>
