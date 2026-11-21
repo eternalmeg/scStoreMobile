@@ -1,4 +1,5 @@
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
 
 const products = [
     {
@@ -46,17 +47,20 @@ export default function CatalogScreen() {
                     />
                     <Text style={styles.title} accessibilityRole="header">SC Store</Text>
                 </View>
-                <View
-                    style={styles.cartIcon}
-                    accessible
-                    accessibilityRole="image"
-                    accessibilityLabel="Shopping cart"
-                >
-                    <View style={styles.cartHandle} />
-                    <View style={styles.cartStem} />
-                    <View style={styles.cartBasket} />
-                    <View style={[styles.cartWheel, { left: 8 }]} />
-                    <View style={[styles.cartWheel, { left: 18 }]} />
+                <View style={styles.headerActions}>
+                    <Link href="/profile" style={styles.profileLink}>Profile</Link>
+                    <View
+                        style={styles.cartIcon}
+                        accessible
+                        accessibilityRole="image"
+                        accessibilityLabel="Shopping cart"
+                    >
+                        <View style={styles.cartHandle} />
+                        <View style={styles.cartStem} />
+                        <View style={styles.cartBasket} />
+                        <View style={[styles.cartWheel, { left: 8 }]} />
+                        <View style={[styles.cartWheel, { left: 18 }]} />
+                    </View>
                 </View>
             </View>
 
@@ -127,6 +131,8 @@ const styles = StyleSheet.create({
     },
     logo: { width: (40 * 398) / 258, height: 40, flexShrink: 0 },
     cartIcon: { width: 24, height: 24, flexShrink: 0 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    profileLink: { paddingVertical: 12, color: '#946A00', fontSize: 14, fontWeight: '600' },
     cartHandle: {
         position: 'absolute',
         top: 1,

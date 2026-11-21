@@ -1,8 +1,39 @@
-import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
+import { useAuth } from '../context/useAuth';
 
 export default function LoginScreen() {
+    const { login } = useAuth();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const submitting = useRef(false);
+    const passwordInput = useRef(null);
+
+    async function handleLogin() {
+        if (submitting.current) return;
+        if (!email.trim() || !password) {
+            setError('Please enter your email and password.');
+            return;
+        }
+        submitting.current = true;
+        setSubmitting(true);
+        setError('');
+        Keyboard.dismiss();
+        try {
+            await login({ email: email.trim(), password });
+            setPassword('');
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Could not log in. Please try again.');
+        } finally {
+            submitting.current = false;
+            setSubmitting(false);
+        }
+    }
+
     return (
         <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
             <KeyboardAvoidingView style={styles.keyboardArea} behavior="padding">
@@ -37,6 +68,12 @@ export default function LoginScreen() {
                                 autoCorrect={false}
                                 autoComplete="email"
                                 accessibilityLabel="Email"
+                                value={email}
+                                onChangeText={setEmail}
+                                editable={!isSubmitting}
+                                returnKeyType="next"
+                                onSubmitEditing={() => passwordInput.current?.focus()}
+                                submitBehavior="submit"
                             />
                         </View>
                         <View>
@@ -50,17 +87,35 @@ export default function LoginScreen() {
                                 autoCorrect={false}
                                 autoComplete="current-password"
                                 accessibilityLabel="Password"
+                                ref={passwordInput}
+                                value={password}
+                                onChangeText={setPassword}
+                                editable={!isSubmitting}
+                                returnKeyType="go"
+                                onSubmitEditing={() => { void handleLogin(); }}
                             />
                         </View>
                     </View>
 
-                    <View style={styles.loginButton}>
-                        <Text style={styles.loginButtonText}>Log in</Text>
-                    </View>
+                    {error ? <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">{error}</Text> : null}
+
+                    <Pressable
+                        style={[styles.loginButton, isSubmitting && styles.disabledButton]}
+                        onPress={() => { void handleLogin(); }}
+                        disabled={isSubmitting}
+                        accessibilityRole="button"
+                        accessibilityLabel={isSubmitting ? 'Logging in' : 'Log in'}
+                        accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+                    >
+                        {isSubmitting ? <ActivityIndicator color="#FFFFFF" /> : null}
+                        <Text style={styles.loginButtonText}>{isSubmitting ? 'Logging in…' : 'Log in'}</Text>
+                    </Pressable>
 
                     <Text style={styles.accountPrompt}>
                         Don’t have an account?{' '}
-                        <Link href="/register" style={styles.createAccount}>Create an account</Link>
+                        {isSubmitting
+                            ? <Text style={styles.createAccount}>Create an account</Text>
+                            : <Link href="/register" style={styles.createAccount}>Create an account</Link>}
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -92,6 +147,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
     },
     loginButton: {
+        flexDirection: 'row',
+        gap: 8,
         marginTop: 24,
         minHeight: 52,
         paddingHorizontal: 20,
@@ -102,6 +159,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#222222',
     },
     loginButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+    disabledButton: { opacity: 0.65 },
+    error: { marginTop: 16, fontSize: 14, lineHeight: 22, color: '#B42318' },
     accountPrompt: { marginTop: 20, fontSize: 14, lineHeight: 22, color: '#666666', textAlign: 'center' },
     createAccount: { fontWeight: '600', color: '#946A00' },
 });

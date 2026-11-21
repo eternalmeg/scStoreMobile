@@ -1,8 +1,99 @@
-import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Link } from 'expo-router';
+import { useAuth } from '../context/useAuth';
 
 export default function RegisterScreen() {
+    const { register } = useAuth();
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isSubmitting, setSubmitting] = useState(false);
+    const submitting = useRef(false);
+
+    async function handleRegister() {
+        if (submitting.current) {
+            return;
+        }
+
+        const userData = {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+            password,
+        };
+
+        if (!userData.firstName) {
+            setError('First name is required.');
+            return;
+        }
+        if (userData.firstName.length < 2 || userData.firstName.length > 20) {
+            setError('First name must be between 2 and 20 characters.');
+            return;
+        }
+        if (!userData.lastName) {
+            setError('Last name is required.');
+            return;
+        }
+        if (userData.lastName.length < 2 || userData.lastName.length > 20) {
+            setError('Last name must be between 2 and 20 characters.');
+            return;
+        }
+        if (userData.email.length < 8 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
+            setError('Enter a valid email address with at least 8 characters.');
+            return;
+        }
+        if (!userData.phone) {
+            setError('Phone is required.');
+            return;
+        }
+        if (userData.phone.length < 9) {
+            setError('Phone must contain at least 9 characters.');
+            return;
+        }
+        if (!password.trim()) {
+            setError('Password is required.');
+            return;
+        }
+        if (password.length < 4) {
+            setError('Password must contain at least 4 characters.');
+            return;
+        }
+        if (!confirmPassword) {
+            setError('Please confirm your password.');
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+
+        submitting.current = true;
+        setSubmitting(true);
+        setError('');
+        Keyboard.dismiss();
+        try {
+            await register(userData);
+            setPassword('');
+            setConfirmPassword('');
+        } catch (error) {
+            let message = 'Could not create your account. Please try again.';
+            if (error instanceof Error && error.message) {
+                message = error.message;
+            }
+            setError(message);
+        } finally {
+            submitting.current = false;
+            setSubmitting(false);
+        }
+    }
+
     return (
         <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
             <KeyboardAvoidingView style={styles.keyboardArea} behavior="padding">
@@ -35,6 +126,9 @@ export default function RegisterScreen() {
                                 autoCapitalize="words"
                                 autoComplete="given-name"
                                 accessibilityLabel="First name"
+                                value={firstName}
+                                onChangeText={setFirstName}
+                                editable={!isSubmitting}
                             />
                         </View>
                         <View>
@@ -46,6 +140,9 @@ export default function RegisterScreen() {
                                 autoCapitalize="words"
                                 autoComplete="family-name"
                                 accessibilityLabel="Last name"
+                                value={lastName}
+                                onChangeText={setLastName}
+                                editable={!isSubmitting}
                             />
                         </View>
                         <View>
@@ -59,6 +156,9 @@ export default function RegisterScreen() {
                                 autoCorrect={false}
                                 autoComplete="email"
                                 accessibilityLabel="Email"
+                                value={email}
+                                onChangeText={setEmail}
+                                editable={!isSubmitting}
                             />
                         </View>
                         <View>
@@ -70,6 +170,9 @@ export default function RegisterScreen() {
                                 keyboardType="phone-pad"
                                 autoComplete="tel"
                                 accessibilityLabel="Phone"
+                                value={phone}
+                                onChangeText={setPhone}
+                                editable={!isSubmitting}
                             />
                         </View>
                         <View>
@@ -83,6 +186,9 @@ export default function RegisterScreen() {
                                 autoCorrect={false}
                                 autoComplete="new-password"
                                 accessibilityLabel="Password"
+                                value={password}
+                                onChangeText={setPassword}
+                                editable={!isSubmitting}
                             />
                         </View>
                         <View>
@@ -96,17 +202,42 @@ export default function RegisterScreen() {
                                 autoCorrect={false}
                                 autoComplete="new-password"
                                 accessibilityLabel="Confirm password"
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                editable={!isSubmitting}
+                                returnKeyType="go"
+                                onSubmitEditing={() => { void handleRegister(); }}
                             />
                         </View>
                     </View>
 
-                    <View style={styles.registerButton}>
+                    {error && <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">{error}</Text>}
+
+                    <Pressable
+                        style={[styles.registerButton, isSubmitting && styles.disabledButton]}
+                        onPress={() => { void handleRegister(); }}
+                        disabled={isSubmitting}
+                        accessibilityRole="button"
+                        accessibilityLabel="Create an account"
+                        accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+                    >
+                        {isSubmitting && <ActivityIndicator color="#FFFFFF" accessibilityLabel="Creating account" />}
                         <Text style={styles.registerButtonText}>Create an account</Text>
-                    </View>
+                    </Pressable>
 
                     <Text style={styles.accountPrompt}>
                         Already have an account?{' '}
-                        <Text style={styles.logIn} onPress={() => router.back()} accessibilityRole="link">Log in</Text>
+                        <Link
+                            href="/"
+                            replace
+                            style={styles.logIn}
+                            accessibilityState={{ disabled: isSubmitting }}
+                            onPress={(event) => {
+                                if (submitting.current) {
+                                    event.preventDefault();
+                                }
+                            }}
+                        >Log in</Link>
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -138,6 +269,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
     },
     registerButton: {
+        flexDirection: 'row',
+        gap: 8,
         marginTop: 24,
         minHeight: 52,
         paddingHorizontal: 20,
@@ -148,6 +281,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#222222',
     },
     registerButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+    disabledButton: { opacity: 0.65 },
+    error: { marginTop: 16, fontSize: 14, lineHeight: 22, color: '#B42318' },
     accountPrompt: { marginTop: 20, fontSize: 14, lineHeight: 22, color: '#666666', textAlign: 'center' },
     logIn: { fontWeight: '600', color: '#946A00' },
 });

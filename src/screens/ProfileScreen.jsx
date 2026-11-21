@@ -1,26 +1,27 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const user = {
-    firstName: 'Alex',
-    lastName: 'Morgan',
-    email: 'alex.morgan@example.com',
-    phone: '+359 888 123 456',
-};
+import { Link } from 'expo-router';
+import { useAuth } from '../context/useAuth';
 
 export default function ProfileScreen() {
+    const { user, logout } = useAuth();
+    if (!user) return null;
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+    const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}` || user.email[0];
+
     return (
         <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+                <Link href="/catalog" dismissTo style={styles.backLink}>‹ Catalog</Link>
                 <Text style={styles.title} accessibilityRole="header">Profile</Text>
 
                 <View style={styles.profileSummary}>
                     <View style={styles.avatar}>
                         <Text style={styles.avatarInitials}>
-                            {user.firstName[0]}{user.lastName[0]}
+                            {initials.toUpperCase()}
                         </Text>
                     </View>
-                    <Text style={styles.name}>{user.firstName} {user.lastName}</Text>
+                    <Text style={styles.name}>{name}</Text>
                 </View>
 
                 <View style={styles.details}>
@@ -30,7 +31,7 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.phoneField}>
                         <Text style={styles.label}>Phone</Text>
-                        <Text style={styles.value}>{user.phone}</Text>
+                        <Text style={styles.value}>{user.phone || '—'}</Text>
                     </View>
                 </View>
 
@@ -38,9 +39,9 @@ export default function ProfileScreen() {
                     <View style={styles.editButton}>
                         <Text style={styles.editButtonText}>Edit profile</Text>
                     </View>
-                    <View style={styles.logoutButton}>
+                    <Pressable style={styles.logoutButton} onPress={() => { void logout(); }} accessibilityRole="button">
                         <Text style={styles.logoutButtonText}>Log out</Text>
-                    </View>
+                    </Pressable>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -51,6 +52,7 @@ const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: '#FFFFFF' },
     scroll: { flex: 1 },
     content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 },
+    backLink: { alignSelf: 'flex-start', paddingVertical: 12, fontSize: 16, color: '#946A00' },
     title: { fontSize: 28, fontWeight: '700', color: '#222222', marginBottom: 24 },
     profileSummary: { alignItems: 'center', marginBottom: 28 },
     avatar: {
