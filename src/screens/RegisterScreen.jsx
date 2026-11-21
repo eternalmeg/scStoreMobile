@@ -1,5 +1,6 @@
 import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 export default function RegisterScreen() {
     return (
@@ -105,7 +106,7 @@ export default function RegisterScreen() {
 
                     <Text style={styles.accountPrompt}>
                         Already have an account?{' '}
-                        <Text style={styles.logIn}>Log in</Text>
+                        <Text style={styles.logIn} onPress={() => router.back()} accessibilityRole="link">Log in</Text>
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>

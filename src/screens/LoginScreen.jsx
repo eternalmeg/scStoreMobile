@@ -1,5 +1,6 @@
 import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 
 export default function LoginScreen() {
     return (
@@ -59,7 +60,7 @@ export default function LoginScreen() {
 
                     <Text style={styles.accountPrompt}>
                         Don’t have an account?{' '}
-                        <Text style={styles.createAccount}>Create an account</Text>
+                        <Link href="/register" style={styles.createAccount}>Create an account</Link>
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
