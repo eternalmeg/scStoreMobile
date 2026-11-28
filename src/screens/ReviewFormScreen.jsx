@@ -8,8 +8,11 @@ import { reviews } from '../data/reviews';
 const stars = [1, 2, 3, 4, 5];
 
 export default function ReviewFormScreen() {
-    const { productId, reviewId } = useLocalSearchParams();
+    const { productId, productName, reviewId } = useLocalSearchParams();
     const product = products.find(item => item.id === productId);
+    let name = '';
+    if (typeof productName === 'string') name = productName;
+    if (product) name = product.name;
     const review = reviews.find(item => item._id === reviewId && item.productId === productId);
     const isEditing = Boolean(reviewId);
     let initialRating = 0;
@@ -23,7 +26,7 @@ export default function ReviewFormScreen() {
     const [rating, setRating] = useState(initialRating);
     const [comment, setComment] = useState(initialComment);
 
-    if (!product || (isEditing && !review)) {
+    if (typeof productId !== 'string' || !name.trim() || (isEditing && !review)) {
         return (
             <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
                 <Text style={styles.headerTitle}>Product or review not found</Text>
@@ -32,7 +35,7 @@ export default function ReviewFormScreen() {
         );
     }
 
-    const reviewsRoute = { pathname: '/catalog/[productId]/reviews', params: { productId: product.id } };
+    const reviewsRoute = { pathname: '/catalog/[productId]/reviews', params: { productId, productName: name } };
 
     function handleSave() {
         Keyboard.dismiss();
@@ -61,7 +64,7 @@ export default function ReviewFormScreen() {
                         </Text>
                     </View>
 
-                    <Text style={styles.productName}>{product.name}</Text>
+                    <Text style={styles.productName}>{name}</Text>
 
                     <View style={styles.form}>
                         <View>
@@ -129,20 +132,71 @@ export default function ReviewFormScreen() {
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: '#FFFFFF' },
-    keyboardArea: { flex: 1 },
-    scroll: { flex: 1 },
-    content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-    backArrow: { fontSize: 28, color: '#333333' },
-    headerTitle: { flexShrink: 1, fontSize: 20, fontWeight: '700', color: '#222222' },
-    productName: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: '#222222', marginBottom: 24 },
-    form: { gap: 24 },
-    label: { fontSize: 14, fontWeight: '600', color: '#666666', marginBottom: 6 },
-    stars: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    starButton: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-    star: { fontSize: 32, color: '#946A00' },
-    emptyStar: { color: '#AAAAAA' },
+    screen: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+    },
+    keyboardArea: {
+        flex: 1,
+    },
+    scroll: {
+        flex: 1,
+    },
+    content: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 48,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 20,
+    },
+    backArrow: {
+        fontSize: 28,
+        color: '#333333',
+    },
+    headerTitle: {
+        flexShrink: 1,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#222222',
+    },
+    productName: {
+        fontSize: 26,
+        lineHeight: 34,
+        fontWeight: '700',
+        color: '#222222',
+        marginBottom: 24,
+    },
+    form: {
+        gap: 24,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#666666',
+        marginBottom: 6,
+    },
+    stars: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    starButton: {
+        width: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    star: {
+        fontSize: 32,
+        color: '#946A00',
+    },
+    emptyStar: {
+        color: '#AAAAAA',
+    },
     commentInput: {
         minHeight: 160,
         paddingHorizontal: 12,
@@ -156,9 +210,21 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         textAlignVertical: 'top',
     },
-    photoSection: { alignItems: 'flex-start', gap: 12 },
-    photoFrame: { width: '72%', height: 140, padding: 8, borderRadius: 10, backgroundColor: '#F6F6F6' },
-    reviewImage: { width: '100%', height: '100%' },
+    photoSection: {
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    photoFrame: {
+        width: '72%',
+        height: 140,
+        padding: 8,
+        borderRadius: 10,
+        backgroundColor: '#F6F6F6',
+    },
+    reviewImage: {
+        width: '100%',
+        height: '100%',
+    },
     photoButton: {
         paddingHorizontal: 16,
         paddingVertical: 12,
@@ -166,7 +232,11 @@ const styles = StyleSheet.create({
         borderColor: '#D5D5D5',
         borderRadius: 8,
     },
-    photoButtonText: { fontSize: 14, fontWeight: '600', color: '#946A00' },
+    photoButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#946A00',
+    },
     saveButton: {
         marginTop: 24,
         minHeight: 52,
@@ -177,5 +247,10 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         backgroundColor: '#222222',
     },
-    saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+    saveButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textAlign: 'center',
+    },
 });

@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useLocalSearchParams } from 'expo-router';
-import { products } from '../data/products';
-import { reviews } from '../data/reviews';
+import * as productService from '../services/productService';
 
 const stars = [1, 2, 3, 4, 5];
 
@@ -12,20 +11,57 @@ export default function ProductDetailsScreen() {
     const [galleryWidth, setGalleryWidth] = useState(0);
     const [activeImage, setActiveImage] = useState(0);
     const { productId } = useLocalSearchParams();
-    const product = products.find(item => item.id === productId);
-    if (!product) {
+    const [product, setProduct] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [attempt, setAttempt] = useState(0);
+
+    useEffect(() => {
+        let active = true;
+
+        async function loadProduct() {
+            setLoading(true);
+            setError('');
+            setProduct(null);
+            setActiveImage(0);
+            try {
+                if (typeof productId !== 'string' || !/^[a-f\d]{24}$/i.test(productId)) return;
+                const result = await productService.getOne(productId);
+                if (active) setProduct(result);
+            } catch (err) {
+                if (active && err.status !== 404) setError(err.message);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }
+
+        loadProduct();
+        return () => { active = false; };
+    }, [productId, attempt]);
+
+    if (loading || error || !product) {
+        let message = 'Product not found';
+        if (loading) message = 'Loading product...';
+        if (error) message = error;
         return (
             <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
-                <Text style={styles.headerTitle}>Product not found</Text>
+                {loading && <ActivityIndicator size="large" color="#946A00" />}
+                <Text style={styles.statusMessage} accessibilityRole="alert">{message}</Text>
+                {error ? <Pressable style={styles.retryButton} onPress={() => setAttempt(attempt + 1)} accessibilityRole="button">
+                    <Text style={styles.retryText}>Try again</Text>
+                </Pressable> : null}
                 <Link href="/catalog" dismissTo style={styles.seeAll}>Back to Catalog</Link>
             </SafeAreaView>
         );
     }
-    const productReviews = reviews.filter(item => item.productId === productId);
-    const review = productReviews[0];
+    const name = `${product.brand} ${product.model}`;
+    let images = [];
+    if (Array.isArray(product.images)) {
+        images = product.images.filter(image => typeof image === 'string' && image.trim());
+    }
     let averageRating = 0;
-    if (productReviews.length > 0) {
-        averageRating = productReviews.reduce((sum, item) => sum + item.rating, 0) / productReviews.length;
+    if (typeof product.averageRating === 'number') {
+        averageRating = product.averageRating;
     }
     const descriptionLines = (product.description || '')
         .split(/\r?\n/)
@@ -58,7 +94,7 @@ export default function ProductDetailsScreen() {
                         }}
                     >
                         <ScrollView
-                            key={galleryWidth}
+                            key={`${product._id}-${galleryWidth}`}
                             horizontal
                             pagingEnabled
                             decelerationRate="fast"
@@ -69,29 +105,30 @@ export default function ProductDetailsScreen() {
                                 const { contentOffset, layoutMeasurement } = event.nativeEvent;
                                 if (layoutMeasurement.width > 0) {
                                     const index = Math.round(contentOffset.x / layoutMeasurement.width);
-                                    setActiveImage(Math.max(0, Math.min(index, product.images.length - 1)));
+                                    setActiveImage(Math.max(0, Math.min(index, images.length - 1)));
                                 }
                             }}
                         >
-                            {galleryWidth > 0 && product.images.map((image, index) => (
+                            {images.length === 0 && <View style={[styles.gallerySlide, { width: galleryWidth }]}><Text style={styles.statusMessage}>No image available</Text></View>}
+                            {galleryWidth > 0 && images.map((image, index) => (
                                 <View key={index} style={[styles.gallerySlide, { width: galleryWidth }]}>
                                     <Image
-                                        source={typeof image === 'string' ? { uri: image } : image}
+                                        source={{ uri: image }}
                                         style={styles.productImage}
                                         resizeMode="contain"
-                                        accessibilityLabel={`${product.name}, image ${index + 1}`}
+                                        accessibilityLabel={`${name}, image ${index + 1}`}
                                     />
                                 </View>
                             ))}
                         </ScrollView>
                     </View>
-                    {product.images.length > 1 && (
+                    {images.length > 1 && (
                         <View
                             style={styles.galleryDots}
                             accessible
-                            accessibilityLabel={`Image ${activeImage + 1} of ${product.images.length}`}
+                            accessibilityLabel={`Image ${activeImage + 1} of ${images.length}`}
                         >
-                            {product.images.map((image, index) => (
+                            {images.map((image, index) => (
                                 <View key={index} style={[styles.galleryDot, index === activeImage && styles.activeDot]} />
                             ))}
                         </View>
@@ -99,7 +136,7 @@ export default function ProductDetailsScreen() {
                 </View>
 
                 <Text style={styles.productName} accessibilityRole="header">
-                    {product.name}
+                    {name}
                 </Text>
                 <View style={styles.priceRow}>
                     <Text style={styles.price}>
@@ -120,7 +157,7 @@ export default function ProductDetailsScreen() {
                                 </Text>
                             ))}
                         </View>
-                        <Text style={styles.ratingValue}>({averageRating}/5)</Text>
+                        <Text style={styles.ratingValue}>({averageRating.toFixed(1)}/5)</Text>
                     </View>
                 </View>
                 {product.shortDescription?.trim() ? (
@@ -149,54 +186,10 @@ export default function ProductDetailsScreen() {
                 <View style={styles.reviews}>
                     <View style={styles.reviewsHeader}>
                         <Text style={styles.sectionTitle} accessibilityRole="header">Reviews</Text>
-                        <Link href={{ pathname: '/catalog/[productId]/reviews', params: { productId: product.id } }} style={styles.seeAll}>See all ›</Link>
+                        <Link href={{ pathname: '/catalog/[productId]/reviews', params: { productId: product._id, productName: name } }} style={styles.seeAll}>See all ›</Link>
                     </View>
 
-                    {review ? <View style={styles.reviewRow}>
-                        <View style={styles.reviewAvatar}>
-                            {review.user.avatarUrl ? (
-                                <Image
-                                    source={{ uri: review.user.avatarUrl }}
-                                    style={styles.avatarImage}
-                                    accessibilityLabel={`${review.user.firstName} ${review.user.lastName} avatar`}
-                                />
-                            ) : (
-                                <Text style={styles.avatarInitials}>
-                                    {review.user.firstName[0]}{review.user.lastName[0]}
-                                </Text>
-                            )}
-                        </View>
-                        <View style={styles.reviewContent}>
-                            <Text style={styles.authorName}>{review.user.firstName} {review.user.lastName}</Text>
-                            <View style={styles.reviewMeta}>
-                                <View
-                                    style={styles.stars}
-                                    accessible
-                                    accessibilityLabel={`${review.rating} out of 5 stars`}
-                                >
-                                    {stars.map((star) => (
-                                        <Text key={star} style={[styles.star, star > review.rating && styles.emptyStar]}>
-                                            {star <= review.rating ? '★' : '☆'}
-                                        </Text>
-                                    ))}
-                                </View>
-                                <Text style={styles.reviewDate}>{review.createdAt}</Text>
-                            </View>
-                            <Text style={styles.reviewComment}>
-                                {review.comment}
-                            </Text>
-                            {review.imageUrl && (
-                                <View style={styles.reviewImageFrame}>
-                                    <Image
-                                        source={typeof review.imageUrl === 'string' ? { uri: review.imageUrl } : review.imageUrl}
-                                        style={styles.productImage}
-                                        resizeMode="contain"
-                                        accessibilityLabel="Temporary Lenovo Legion Pro 5 review photo"
-                                    />
-                                </View>
-                            )}
-                        </View>
-                    </View> : <Text style={styles.reviewComment}>No reviews yet.</Text>}
+                    <Text style={styles.reviewComment}>Reviews are not connected yet.</Text>
                 </View>
 
                 <Link href="/cart" asChild>
@@ -210,11 +203,32 @@ export default function ProductDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+    statusMessage: {
+        fontSize: 16,
+        lineHeight: 24,
+        color: '#666666',
+        marginVertical: 20,
+    },
+    retryButton: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#222222',
+        borderRadius: 12,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        marginBottom: 20,
+    },
+    retryText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '700',
+    },
     screen: {
         flex: 1,
         backgroundColor: '#FFFFFF',
     },
-    scroll: { flex: 1 },
+    scroll: {
+        flex: 1,
+    },
     content: {
         paddingHorizontal: 16,
         paddingTop: 16,
@@ -236,22 +250,34 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#222222',
     },
-    gallery: { marginBottom: 20 },
+    gallery: {
+        marginBottom: 20,
+    },
     imageFrame: {
         height: 280,
         borderRadius: 14,
         backgroundColor: '#F6F6F6',
         overflow: 'hidden',
     },
-    gallerySlide: { height: 280, padding: 16 },
+    gallerySlide: {
+        height: 280,
+        padding: 16,
+    },
     galleryDots: {
         flexDirection: 'row',
         justifyContent: 'center',
         gap: 8,
         marginTop: 12,
     },
-    galleryDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#D5D5D5' },
-    activeDot: { backgroundColor: '#946A00' },
+    galleryDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#D5D5D5',
+    },
+    activeDot: {
+        backgroundColor: '#946A00',
+    },
     productImage: {
         width: '100%',
         height: '100%',
@@ -286,16 +312,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 2,
     },
-    star: { fontSize: 18, color: '#946A00' },
-    emptyStar: { color: '#AAAAAA' },
-    ratingValue: { fontSize: 14, color: '#666666' },
+    star: {
+        fontSize: 18,
+        color: '#946A00',
+    },
+    emptyStar: {
+        color: '#AAAAAA',
+    },
+    ratingValue: {
+        fontSize: 14,
+        color: '#666666',
+    },
     specificationsSection: {
         marginTop: 24,
         paddingTop: 20,
         borderTopWidth: 1,
         borderTopColor: '#E5E5E5',
     },
-    specificationsTitle: { marginBottom: 12 },
+    specificationsTitle: {
+        marginBottom: 12,
+    },
     specificationRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -317,7 +353,12 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         color: '#222222',
     },
-    specificationText: { paddingVertical: 10, fontSize: 14, lineHeight: 22, color: '#555555' },
+    specificationText: {
+        paddingVertical: 10,
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#555555',
+    },
     reviews: {
         marginTop: 24,
         paddingTop: 20,
@@ -336,45 +377,15 @@ const styles = StyleSheet.create({
         gap: 12,
         marginBottom: 16,
     },
-    seeAll: { fontSize: 14, color: '#946A00' },
-    reviewRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
+    seeAll: {
+        fontSize: 14,
+        color: '#946A00',
     },
-    reviewAvatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        flexShrink: 0,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F0ECE3',
-    },
-    avatarInitials: { fontSize: 14, fontWeight: '700', color: '#333333' },
-    avatarImage: { width: 44, height: 44, borderRadius: 22 },
-    reviewContent: { flex: 1, minWidth: 0 },
-    authorName: { fontSize: 16, fontWeight: '700', color: '#222222' },
-    reviewMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginTop: 6,
-    },
-    reviewDate: { fontSize: 14, color: '#777777' },
     reviewComment: {
         marginTop: 10,
         fontSize: 16,
         lineHeight: 24,
         color: '#333333',
-    },
-    reviewImageFrame: {
-        width: '72%',
-        height: 140,
-        padding: 8,
-        marginTop: 12,
-        borderRadius: 10,
-        backgroundColor: '#F6F6F6',
     },
     description: {
         fontSize: 16,

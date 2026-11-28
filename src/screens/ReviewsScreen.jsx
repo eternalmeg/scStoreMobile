@@ -21,9 +21,12 @@ function RatingStars({ rating }) {
 }
 
 export default function ReviewsScreen() {
-    const { productId } = useLocalSearchParams();
+    const { productId, productName } = useLocalSearchParams();
     const product = products.find(item => item.id === productId);
-    if (!product) {
+    let name = '';
+    if (typeof productName === 'string') name = productName;
+    if (product) name = product.name;
+    if (typeof productId !== 'string' || !name.trim()) {
         return (
             <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
                 <Text style={styles.headerTitle}>Product not found</Text>
@@ -41,7 +44,7 @@ export default function ReviewsScreen() {
         <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
                 <View style={styles.header}>
-                    <Link href={{ pathname: '/catalog/[productId]', params: { productId: product.id } }} dismissTo asChild>
+                    <Link href={{ pathname: '/catalog/[productId]', params: { productId } }} dismissTo asChild>
                         <Pressable accessibilityRole="button" accessibilityLabel="Back to product" hitSlop={12}>
                             <Text style={styles.backArrow}>←</Text>
                         </Pressable>
@@ -50,7 +53,7 @@ export default function ReviewsScreen() {
                 </View>
 
                 <Text style={styles.productName} accessibilityRole="header">
-                    {product.name}
+                    {name}
                 </Text>
                 <View style={styles.ratingSummary}>
                     <RatingStars rating={averageRating} />
@@ -58,13 +61,13 @@ export default function ReviewsScreen() {
                     <Text style={styles.reviewCount}>{productReviews.length} reviews</Text>
                 </View>
 
-                <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId: product.id } }} asChild>
+                <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name } }} asChild>
                     <Pressable style={styles.writeButton} accessibilityRole="button">
                         <Text style={styles.writeButtonText}>Write a review</Text>
                     </Pressable>
                 </Link>
 
-                {productReviews.length === 0 && <Text style={styles.comment}>No reviews yet.</Text>}
+                {productReviews.length === 0 && <Text style={styles.comment}>Reviews are not connected yet. This screen uses demo data.</Text>}
 
                 <View>
                     {sortedReviews.map((review) => (
@@ -104,7 +107,7 @@ export default function ReviewsScreen() {
                                 )}
                                 {review.user._id === currentUserId && (
                                     <View style={styles.reviewActions}>
-                                        <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId: product.id, reviewId: review._id } }} style={styles.edit}>Edit</Link>
+                                        <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name, reviewId: review._id } }} style={styles.edit}>Edit</Link>
                                         <Text style={styles.delete}>Delete</Text>
                                     </View>
                                 )}
@@ -118,19 +121,68 @@ export default function ReviewsScreen() {
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: '#FFFFFF' },
-    scroll: { flex: 1 },
-    content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-    backArrow: { fontSize: 28, color: '#333333' },
-    headerTitle: { flexShrink: 1, fontSize: 20, fontWeight: '700', color: '#222222' },
-    productName: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: '#222222' },
-    ratingSummary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 10 },
-    stars: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-    star: { fontSize: 18, color: '#946A00' },
-    emptyStar: { color: '#AAAAAA' },
-    averageRating: { fontSize: 16, fontWeight: '600', color: '#222222' },
-    reviewCount: { fontSize: 14, color: '#777777' },
+    screen: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+    },
+    scroll: {
+        flex: 1,
+    },
+    content: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 48,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 20,
+    },
+    backArrow: {
+        fontSize: 28,
+        color: '#333333',
+    },
+    headerTitle: {
+        flexShrink: 1,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#222222',
+    },
+    productName: {
+        fontSize: 26,
+        lineHeight: 34,
+        fontWeight: '700',
+        color: '#222222',
+    },
+    ratingSummary: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 10,
+    },
+    stars: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    star: {
+        fontSize: 18,
+        color: '#946A00',
+    },
+    emptyStar: {
+        color: '#AAAAAA',
+    },
+    averageRating: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#222222',
+    },
+    reviewCount: {
+        fontSize: 14,
+        color: '#777777',
+    },
     writeButton: {
         minHeight: 52,
         paddingHorizontal: 20,
@@ -142,7 +194,12 @@ const styles = StyleSheet.create({
         marginTop: 24,
         marginBottom: 20,
     },
-    writeButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+    writeButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textAlign: 'center',
+    },
     reviewRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -160,16 +217,66 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#F0ECE3',
     },
-    avatarImage: { width: 44, height: 44, borderRadius: 22 },
-    avatarInitials: { fontSize: 14, fontWeight: '700', color: '#333333' },
-    reviewContent: { flex: 1, minWidth: 0 },
-    authorName: { fontSize: 16, fontWeight: '700', color: '#222222' },
-    reviewMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 6 },
-    reviewDate: { fontSize: 14, color: '#777777' },
-    comment: { marginTop: 10, fontSize: 16, lineHeight: 24, color: '#333333' },
-    reviewImageFrame: { width: '72%', height: 140, padding: 8, marginTop: 12, borderRadius: 10, backgroundColor: '#F6F6F6' },
-    reviewImage: { width: '100%', height: '100%' },
-    reviewActions: { flexDirection: 'row', gap: 20, marginTop: 14 },
-    edit: { fontSize: 14, fontWeight: '600', color: '#946A00' },
-    delete: { fontSize: 14, color: '#666666' },
+    avatarImage: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    avatarInitials: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#333333',
+    },
+    reviewContent: {
+        flex: 1,
+        minWidth: 0,
+    },
+    authorName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#222222',
+    },
+    reviewMeta: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 6,
+    },
+    reviewDate: {
+        fontSize: 14,
+        color: '#777777',
+    },
+    comment: {
+        marginTop: 10,
+        fontSize: 16,
+        lineHeight: 24,
+        color: '#333333',
+    },
+    reviewImageFrame: {
+        width: '72%',
+        height: 140,
+        padding: 8,
+        marginTop: 12,
+        borderRadius: 10,
+        backgroundColor: '#F6F6F6',
+    },
+    reviewImage: {
+        width: '100%',
+        height: '100%',
+    },
+    reviewActions: {
+        flexDirection: 'row',
+        gap: 20,
+        marginTop: 14,
+    },
+    edit: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#946A00',
+    },
+    delete: {
+        fontSize: 14,
+        color: '#666666',
+    },
 });
