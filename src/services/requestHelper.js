@@ -1,14 +1,18 @@
+import { fetch } from 'expo/fetch';
+
 let baseUrl = process.env.EXPO_PUBLIC_API_URL;
 if (!baseUrl) {
     baseUrl = 'http://localhost:3000/api';
 }
 
 
-export async function request(path, method = 'GET', body, token) {
+export async function request(path, method = 'GET', body, token, timeoutMs = 15000) {
     const controller = new AbortController();
+    const url = /^https:\/\//.test(path) ? path : `${baseUrl}${path}`;
+    const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
     const timeout = setTimeout(() => {
         controller.abort();
-    }, 15000);
+    }, timeoutMs);
 
     try {
         const headers = {
@@ -21,7 +25,9 @@ export async function request(path, method = 'GET', body, token) {
         };
         options.credentials = 'omit';
 
-        if (body !== undefined) {
+        if (multipart) {
+            options.body = body;
+        } else if (body !== undefined) {
             headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
         }
@@ -29,7 +35,7 @@ export async function request(path, method = 'GET', body, token) {
             headers.Authorization = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${baseUrl}${path}`, options);
+        const response = await fetch(url, options);
 
         if (response.status === 204) {
             return null;
@@ -47,7 +53,7 @@ export async function request(path, method = 'GET', body, token) {
         }
 
         if (!response.ok) {
-            let message = `The server could not complete the request (HTTP ${response.status}). Please try again.`;
+            let message = 'The server could not complete the request. Please try again.';
             if (data && typeof data.message === 'string') {
                 message = data.message;
             }

@@ -1,8 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-export const unstable_settings = { anchor: 'catalog' };
-
 export default function ProtectedLayout() {
     return (
         <Tabs

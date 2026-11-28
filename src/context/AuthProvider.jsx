@@ -95,15 +95,28 @@ export function AuthProvider({ children }) {
     }, [restoreSession]);
 
     useEffect(() => {
+        let active = true;
+        const id = operationId.current;
+        async function refreshSession() {
+            try {
+                const currentUser = await authService.getCurrentUser(token);
+                if (active && id === operationId.current) setUser(currentUser);
+            } catch (error) {
+                if (active && id === operationId.current && (error.status === 401 || error.status === 403)) {
+                    await logout();
+                }
+            }
+        }
         const subscription = AppState.addEventListener('change', next => {
-            if (next === 'active' && user) {
-                void restoreSession();
+            if (next === 'active' && user && token) {
+                void refreshSession();
             }
         });
         return () => {
+            active = false;
             subscription.remove();
         };
-    }, [user, restoreSession]);
+    }, [user, token, logout]);
 
     async function login(userData) {
         operationId.current += 1;

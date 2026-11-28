@@ -11,6 +11,9 @@
       "supportsTablet": true
     },
     "android": {
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -23,7 +26,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow scStore to select a photo for your review.",
+          "cameraPermission": "Allow scStore to take a photo for your review.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

@@ -209,6 +209,9 @@ export default function ProductDetailsScreen() {
                                 ))}
                             </View>
                             <Text style={styles.reviewComment}>{reviews[0].comment}</Text>
+                            {reviews[0].imageUrl ? (
+                                <Image source={{ uri: reviews[0].imageUrl }} style={styles.reviewImage} resizeMode="contain" accessibilityLabel="Review photo" />
+                            ) : null}
                         </View>
                     ) : <Text style={styles.reviewComment}>No reviews yet.</Text>}
                 </View>
@@ -224,6 +227,13 @@ export default function ProductDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+    reviewImage: {
+        width: '72%',
+        height: 140,
+        marginTop: 12,
+        borderRadius: 10,
+        backgroundColor: '#F6F6F6',
+    },
     statusMessage: {
         fontSize: 16,
         lineHeight: 24,

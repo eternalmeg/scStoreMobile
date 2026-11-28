@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../context/useAuth';
@@ -181,6 +181,9 @@ export default function ReviewsScreen() {
                                         <Text style={styles.reviewDate}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}</Text>
                                     </View>
                                     <Text style={styles.comment}>{review.comment}</Text>
+                                    {review.imageUrl ? (
+                                        <Image source={{ uri: review.imageUrl }} style={styles.reviewImage} resizeMode="contain" accessibilityLabel="Review photo" />
+                                    ) : null}
                                     {user && (review.user?._id || review.user) === user._id && (
                                         <View style={styles.reviewActions}>
                                             <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name, reviewId: review._id } }} asChild>
@@ -204,6 +207,13 @@ export default function ReviewsScreen() {
 }
 
 const styles = StyleSheet.create({
+    reviewImage: {
+        width: '100%',
+        height: 160,
+        marginTop: 12,
+        borderRadius: 10,
+        backgroundColor: '#F6F6F6',
+    },
     status: {
         gap: 16,
         paddingVertical: 24,

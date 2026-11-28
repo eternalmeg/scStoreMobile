@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../context/useAuth';
 import * as productService from '../services/productService';
 import * as reviewService from '../services/reviewService';
+import * as cloudinaryService from '../services/cloudinaryService';
 
 const stars = [1, 2, 3, 4, 5];
 
@@ -22,7 +24,14 @@ export default function ReviewFormScreen() {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [attempt, setAttempt] = useState(0);
+    const [photo, setPhoto] = useState(null);
+    const [photoChanged, setPhotoChanged] = useState(false);
+    const [photoError, setPhotoError] = useState('');
+    const [needsSettings, setNeedsSettings] = useState(false);
+    const [choosingPhoto, setChoosingPhoto] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const saving = useRef(false);
+    const picking = useRef(false);
     const operationId = useRef(0);
     const validProductId = typeof productId === 'string' && /^[a-f\d]{24}$/i.test(productId);
 
@@ -30,12 +39,19 @@ export default function ReviewFormScreen() {
         let active = true;
         operationId.current += 1;
         saving.current = false;
+        picking.current = false;
 
         async function loadForm() {
             setLoading(true);
             setLoadError('');
             setError('');
             setSubmitting(false);
+            setChoosingPhoto(false);
+            setUploading(false);
+            setPhoto(null);
+            setPhotoChanged(false);
+            setPhotoError('');
+            setNeedsSettings(false);
             setProduct(null);
             setReview(null);
             setRating(0);
@@ -66,6 +82,9 @@ export default function ReviewFormScreen() {
                     if (currentReview) {
                         setRating(currentReview.rating);
                         setComment(currentReview.comment);
+                        if (currentReview.imageUrl) {
+                            setPhoto({ uri: currentReview.imageUrl, uploadedUrl: currentReview.imageUrl });
+                        }
                     }
                 }
             } catch (err) {
@@ -95,9 +114,79 @@ export default function ReviewFormScreen() {
     if (product) name = `${product.brand} ${product.model}`;
     const reviewsRoute = { pathname: '/catalog/[productId]/reviews', params: { productId, productName: name } };
     const ready = !loading && !loadError && product?._id === productId && (!isEditing || review?._id === reviewId);
+    const busy = submitting || choosingPhoto;
+
+    function showPhotoOptions() {
+        if (!ready || saving.current || picking.current) return;
+        const id = operationId.current;
+        picking.current = true;
+        setChoosingPhoto(true);
+        setPhotoError('');
+        setNeedsSettings(false);
+        Alert.alert('Review photo', 'Choose a photo source', [
+            { text: 'Camera', onPress: () => { if (id === operationId.current) void pickPhoto('camera'); } },
+            { text: 'Gallery', onPress: () => { if (id === operationId.current) void pickPhoto('gallery'); } },
+            {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                    if (id !== operationId.current) return;
+                    picking.current = false;
+                    setChoosingPhoto(false);
+                },
+            },
+        ], { cancelable: false });
+    }
+
+    async function pickPhoto(source) {
+        const id = operationId.current;
+        try {
+            if (source === 'camera' || Platform.OS === 'ios') {
+                const permission = source === 'camera'
+                    ? await ImagePicker.requestCameraPermissionsAsync()
+                    : await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (id !== operationId.current) return;
+                const limitedAccess = 'accessPrivileges' in permission && permission.accessPrivileges === 'limited';
+                if (!permission.granted && !limitedAccess) {
+                    setPhotoError(source === 'camera'
+                        ? 'Camera access was denied. Allow access to take a review photo.'
+                        : 'Photo library access was denied. Allow access to choose a review photo.');
+                    setNeedsSettings(!permission.canAskAgain);
+                    return;
+                }
+            }
+            const launchPicker = source === 'camera' ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+            const result = await launchPicker({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                allowsMultipleSelection: false,
+                quality: 0.8,
+                preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+            });
+            if (id !== operationId.current || result.canceled) return;
+            const selected = cloudinaryService.validatePhoto(result.assets[0]);
+            setPhoto(selected);
+            setPhotoChanged(true);
+        } catch (err) {
+            if (id === operationId.current) setPhotoError(err.message || 'Could not select a photo. Please try again.');
+        } finally {
+            if (id === operationId.current) {
+                picking.current = false;
+                setChoosingPhoto(false);
+            }
+        }
+    }
+
+    function removePhoto() {
+        if (saving.current || picking.current) return;
+        setPhoto(null);
+        setPhotoChanged(true);
+        setPhotoError('');
+        setNeedsSettings(false);
+    }
 
     async function handleSave() {
-        if (saving.current || !ready) return;
+        if (saving.current || picking.current || !ready) return;
         Keyboard.dismiss();
         setError('');
         if (typeof rating !== 'number' || !Number.isFinite(rating) || rating < 1 || rating > 5) {
@@ -117,17 +206,30 @@ export default function ReviewFormScreen() {
         setSubmitting(true);
         const id = operationId.current;
         try {
+            const data = { rating, comment: text };
+            if (photoChanged) {
+                let imageUrl = photo?.uploadedUrl || '';
+                if (photo && !imageUrl) {
+                    setUploading(true);
+                    imageUrl = await cloudinaryService.uploadPhoto(photo);
+                    if (id !== operationId.current) return;
+                    setPhoto(current => ({ ...current, uploadedUrl: imageUrl }));
+                    setUploading(false);
+                }
+                data['imageUrl'] = imageUrl;
+            }
             if (isEditing) {
-                await reviewService.updateReview(reviewId, { rating, comment: text }, token);
+                await reviewService.updateReview(reviewId, data, token);
             } else {
-                await reviewService.createReview({ productId, rating, comment: text }, token);
+                await reviewService.createReview({ productId, ...data }, token);
             }
             if (id === operationId.current) router.dismissTo(reviewsRoute);
         } catch (err) {
             if (id === operationId.current) {
-                setError(err.message);
+                setError(err.message || 'Could not save your review. Please try again.');
                 saving.current = false;
                 setSubmitting(false);
+                setUploading(false);
             }
         }
     }
@@ -143,7 +245,7 @@ export default function ReviewFormScreen() {
                 >
                     <View style={styles.header}>
                         <Link href={reviewsRoute} dismissTo asChild>
-                            <Pressable disabled={submitting} accessibilityRole="button" accessibilityLabel="Back to Reviews" hitSlop={12}>
+                            <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel="Back to Reviews" hitSlop={12}>
                                 <Text style={styles.backArrow}>←</Text>
                             </Pressable>
                         </Link>
@@ -172,11 +274,11 @@ export default function ReviewFormScreen() {
                                         <Pressable
                                             key={star}
                                             style={styles.starButton}
-                                            disabled={submitting}
+                                            disabled={busy}
                                             onPress={() => setRating(star)}
                                             accessibilityRole="button"
                                             accessibilityLabel={`${star} out of 5 stars`}
-                                            accessibilityState={{ selected: star === rating, disabled: submitting }}
+                                            accessibilityState={{ selected: star === rating, disabled: busy }}
                                         >
                                             <Text style={[styles.star, star > rating && styles.emptyStar]}>
                                                 {star <= rating ? '★' : '☆'}
@@ -191,7 +293,7 @@ export default function ReviewFormScreen() {
                                 <TextInput
                                     style={styles.commentInput}
                                     value={comment}
-                                    editable={!submitting}
+                                    editable={!busy}
                                     onChangeText={setComment}
                                     placeholder="Share your experience with this product"
                                     placeholderTextColor="#999999"
@@ -201,13 +303,35 @@ export default function ReviewFormScreen() {
                                 />
                             </View>
 
-                            <Text style={styles.label}>Photo uploads are not available yet.</Text>
+                            <View style={styles.photoSection}>
+                                <Text style={styles.label}>Photo (optional)</Text>
+                                {photo && (
+                                    <Image source={{ uri: photo.uri }} style={styles.photoPreview} resizeMode="contain" accessibilityLabel="Review photo preview" />
+                                )}
+                                <View style={styles.photoActions}>
+                                    <Pressable onPress={showPhotoOptions} disabled={busy} style={styles.photoButton} accessibilityRole="button" accessibilityState={{ disabled: busy }}>
+                                        <Text style={styles.backLink}>{photo ? 'Replace photo' : 'Add photo'}</Text>
+                                    </Pressable>
+                                    {photo && (
+                                        <Pressable onPress={removePhoto} disabled={busy} style={styles.photoButton} accessibilityRole="button" accessibilityState={{ disabled: busy }}>
+                                            <Text style={styles.backLink}>Remove photo</Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                                <Text style={styles.photoHint}>JPEG, PNG or WebP · up to 10 MB</Text>
+                                {photoError ? <Text style={styles.error} accessibilityRole="alert">{photoError}</Text> : null}
+                                {needsSettings && (
+                                    <Pressable onPress={() => { void Linking.openSettings().catch(() => setPhotoError('Open your phone settings to allow access.')); }} disabled={busy} accessibilityRole="button">
+                                        <Text style={styles.backLink}>Open settings</Text>
+                                    </Pressable>
+                                )}
+                            </View>
                         </View>
 
                         {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
-                        <Pressable style={[styles.saveButton, submitting && styles.disabledButton]} onPress={handleSave} disabled={submitting} accessibilityRole="button" accessibilityState={{ disabled: submitting, busy: submitting }}>
+                        <Pressable style={[styles.saveButton, busy && styles.disabledButton]} onPress={handleSave} disabled={busy} accessibilityRole="button" accessibilityState={{ disabled: busy, busy }}>
                             <Text style={styles.saveButtonText}>
-                                {submitting ? 'Saving...' : isEditing ? 'Save changes' : 'Post review'}
+                                {uploading ? 'Uploading photo...' : submitting ? 'Saving...' : isEditing ? 'Save changes' : 'Post review'}
                             </Text>
                         </Pressable>
                     </>}
@@ -218,6 +342,31 @@ export default function ReviewFormScreen() {
 }
 
 const styles = StyleSheet.create({
+    photoSection: {
+        gap: 12,
+    },
+    photoPreview: {
+        width: '100%',
+        height: 200,
+        borderRadius: 10,
+        backgroundColor: '#F6F6F6',
+    },
+    photoActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    photoButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: '#D5D5D5',
+        borderRadius: 8,
+    },
+    photoHint: {
+        fontSize: 13,
+        color: '#777777',
+    },
     status: {
         gap: 12,
     },
