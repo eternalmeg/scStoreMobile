@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useLocalSearchParams } from 'expo-router';
-import * as productService from '../services/productService';
+import { Link, useIsFocused, useLocalSearchParams } from 'expo-router';
+import * as reviewService from '../services/reviewService';
 
 const stars = [1, 2, 3, 4, 5];
 
@@ -11,23 +11,30 @@ export default function ProductDetailsScreen() {
     const [galleryWidth, setGalleryWidth] = useState(0);
     const [activeImage, setActiveImage] = useState(0);
     const { productId } = useLocalSearchParams();
+    const isFocused = useIsFocused();
     const [product, setProduct] = useState(null);
+    const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
+        if (!isFocused) return;
         let active = true;
 
         async function loadProduct() {
             setLoading(true);
             setError('');
             setProduct(null);
+            setReviews([]);
             setActiveImage(0);
             try {
                 if (typeof productId !== 'string' || !/^[a-f\d]{24}$/i.test(productId)) return;
-                const result = await productService.getOne(productId);
-                if (active) setProduct(result);
+                const result = await reviewService.getProductReviews(productId);
+                if (active) {
+                    setProduct(result.product);
+                    setReviews(result.reviews);
+                }
             } catch (err) {
                 if (active && err.status !== 404) setError(err.message);
             } finally {
@@ -37,7 +44,7 @@ export default function ProductDetailsScreen() {
 
         loadProduct();
         return () => { active = false; };
-    }, [productId, attempt]);
+    }, [productId, attempt, isFocused]);
 
     if (loading || error || !product) {
         let message = 'Product not found';
@@ -60,8 +67,8 @@ export default function ProductDetailsScreen() {
         images = product.images.filter(image => typeof image === 'string' && image.trim());
     }
     let averageRating = 0;
-    if (typeof product.averageRating === 'number') {
-        averageRating = product.averageRating;
+    if (reviews.length > 0) {
+        averageRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
     }
     const descriptionLines = (product.description || '')
         .split(/\r?\n/)
@@ -157,7 +164,7 @@ export default function ProductDetailsScreen() {
                                 </Text>
                             ))}
                         </View>
-                        <Text style={styles.ratingValue}>({averageRating.toFixed(1)}/5)</Text>
+                        <Text style={styles.ratingValue}>({averageRating.toFixed(1)}/5 · {reviews.length} reviews)</Text>
                     </View>
                 </View>
                 {product.shortDescription?.trim() ? (
@@ -185,11 +192,25 @@ export default function ProductDetailsScreen() {
 
                 <View style={styles.reviews}>
                     <View style={styles.reviewsHeader}>
-                        <Text style={styles.sectionTitle} accessibilityRole="header">Reviews</Text>
+                        <Text style={styles.sectionTitle} accessibilityRole="header">Reviews ({reviews.length})</Text>
                         <Link href={{ pathname: '/catalog/[productId]/reviews', params: { productId: product._id, productName: name } }} style={styles.seeAll}>See all ›</Link>
                     </View>
 
-                    <Text style={styles.reviewComment}>Reviews are not connected yet.</Text>
+                    {reviews.length > 0 ? (
+                        <View>
+                            <Text style={styles.reviewAuthor}>
+                                {[reviews[0].user?.firstName, reviews[0].user?.lastName].filter(Boolean).join(' ') || 'Customer'}
+                            </Text>
+                            <View style={styles.stars} accessible accessibilityLabel={`${reviews[0].rating} out of 5 stars`}>
+                                {stars.map(star => (
+                                    <Text key={star} style={[styles.star, star > reviews[0].rating && styles.emptyStar]}>
+                                        {star <= reviews[0].rating ? '★' : '☆'}
+                                    </Text>
+                                ))}
+                            </View>
+                            <Text style={styles.reviewComment}>{reviews[0].comment}</Text>
+                        </View>
+                    ) : <Text style={styles.reviewComment}>No reviews yet.</Text>}
                 </View>
 
                 <Link href="/cart" asChild>
@@ -304,6 +325,7 @@ const styles = StyleSheet.create({
     },
     ratingGroup: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
         gap: 6,
     },
@@ -386,6 +408,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#333333',
+    },
+    reviewAuthor: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#222222',
+        marginBottom: 6,
     },
     description: {
         fontSize: 16,

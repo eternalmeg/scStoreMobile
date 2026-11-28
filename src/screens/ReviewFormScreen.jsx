@@ -1,47 +1,135 @@
-import { useState } from 'react';
-import { Alert, Image, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
-import { products } from '../data/products';
-import { reviews } from '../data/reviews';
+import { useAuth } from '../context/useAuth';
+import * as productService from '../services/productService';
+import * as reviewService from '../services/reviewService';
 
 const stars = [1, 2, 3, 4, 5];
 
 export default function ReviewFormScreen() {
     const { productId, productName, reviewId } = useLocalSearchParams();
-    const product = products.find(item => item.id === productId);
-    let name = '';
-    if (typeof productName === 'string') name = productName;
-    if (product) name = product.name;
-    const review = reviews.find(item => item._id === reviewId && item.productId === productId);
-    const isEditing = Boolean(reviewId);
-    let initialRating = 0;
-    let initialComment = '';
-    let imageUrl = null;
-    if (isEditing && review) {
-        initialRating = review.rating;
-        initialComment = review.comment;
-        imageUrl = review.imageUrl;
-    }
-    const [rating, setRating] = useState(initialRating);
-    const [comment, setComment] = useState(initialComment);
+    const { user, token } = useAuth();
+    const userId = user?._id;
+    const isEditing = reviewId !== undefined;
+    const [product, setProduct] = useState(null);
+    const [review, setReview] = useState(null);
+    const [rating, setRating] = useState(0);
+    const [comment, setComment] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+    const saving = useRef(false);
+    const operationId = useRef(0);
+    const validProductId = typeof productId === 'string' && /^[a-f\d]{24}$/i.test(productId);
 
-    if (typeof productId !== 'string' || !name.trim() || (isEditing && !review)) {
+    useEffect(() => {
+        let active = true;
+        operationId.current += 1;
+        saving.current = false;
+
+        async function loadForm() {
+            setLoading(true);
+            setLoadError('');
+            setError('');
+            setSubmitting(false);
+            setProduct(null);
+            setReview(null);
+            setRating(0);
+            setComment('');
+            try {
+                if (!validProductId) return;
+                if (!token || !userId) throw new Error('Please log in to write a review.');
+                if (isEditing && (typeof reviewId !== 'string' || !/^[a-f\d]{24}$/i.test(reviewId))) {
+                    throw new Error('Review not found.');
+                }
+                const [currentProduct, currentReview] = await Promise.all([
+                    productService.getOne(productId),
+                    isEditing ? reviewService.getOne(reviewId, token) : Promise.resolve(null),
+                ]);
+                if (currentReview) {
+                    const ownerId = currentReview.user?._id || currentReview.user;
+                    const deviceId = currentReview.device?._id || currentReview.device;
+                    if (ownerId !== userId || deviceId !== productId) {
+                        throw new Error('Review not found or you do not have permission to edit it.');
+                    }
+                    if (!Number.isFinite(currentReview.rating) || currentReview.rating < 1 || currentReview.rating > 5 || typeof currentReview.comment !== 'string') {
+                        throw new Error('Unexpected review data. Please try again.');
+                    }
+                }
+                if (active) {
+                    setProduct(currentProduct);
+                    setReview(currentReview);
+                    if (currentReview) {
+                        setRating(currentReview.rating);
+                        setComment(currentReview.comment);
+                    }
+                }
+            } catch (err) {
+                if (active) setLoadError(err.message);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }
+
+        loadForm();
+        return () => {
+            active = false;
+            operationId.current += 1;
+        };
+    }, [productId, reviewId, isEditing, token, userId, validProductId, attempt]);
+
+    if (!validProductId) {
         return (
             <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
                 <Text style={styles.headerTitle}>Product or review not found</Text>
-                <Link href="/catalog" dismissTo style={styles.photoButtonText}>Back to Catalog</Link>
+                <Link href="/catalog" dismissTo style={styles.backLink}>Back to Catalog</Link>
             </SafeAreaView>
         );
     }
 
+    let name = typeof productName === 'string' ? productName : '';
+    if (product) name = `${product.brand} ${product.model}`;
     const reviewsRoute = { pathname: '/catalog/[productId]/reviews', params: { productId, productName: name } };
+    const ready = !loading && !loadError && product?._id === productId && (!isEditing || review?._id === reviewId);
 
-    function handleSave() {
+    async function handleSave() {
+        if (saving.current || !ready) return;
         Keyboard.dismiss();
-        Alert.alert('Demo review', 'The review is not saved. The app is using static data.', [
-            { text: 'OK', onPress: () => router.dismissTo(reviewsRoute) },
-        ]);
+        setError('');
+        if (typeof rating !== 'number' || !Number.isFinite(rating) || rating < 1 || rating > 5) {
+            setError('Choose a rating from 1 to 5 stars.');
+            return;
+        }
+        const text = comment.trim();
+        if (text.length < 3) {
+            setError('Your review must contain at least 3 characters.');
+            return;
+        }
+        if (!token || !userId) {
+            setError('Please log in to write a review.');
+            return;
+        }
+        saving.current = true;
+        setSubmitting(true);
+        const id = operationId.current;
+        try {
+            if (isEditing) {
+                await reviewService.updateReview(reviewId, { rating, comment: text }, token);
+            } else {
+                await reviewService.createReview({ productId, rating, comment: text }, token);
+            }
+            if (id === operationId.current) router.dismissTo(reviewsRoute);
+        } catch (err) {
+            if (id === operationId.current) {
+                setError(err.message);
+                saving.current = false;
+                setSubmitting(false);
+            }
+        }
     }
 
     return (
@@ -55,7 +143,7 @@ export default function ReviewFormScreen() {
                 >
                     <View style={styles.header}>
                         <Link href={reviewsRoute} dismissTo asChild>
-                            <Pressable accessibilityRole="button" accessibilityLabel="Back to Reviews" hitSlop={12}>
+                            <Pressable disabled={submitting} accessibilityRole="button" accessibilityLabel="Back to Reviews" hitSlop={12}>
                                 <Text style={styles.backArrow}>←</Text>
                             </Pressable>
                         </Link>
@@ -66,65 +154,63 @@ export default function ReviewFormScreen() {
 
                     <Text style={styles.productName}>{name}</Text>
 
-                    <View style={styles.form}>
-                        <View>
-                            <Text style={styles.label}>Your rating</Text>
-                            <View style={styles.stars}>
-                                {stars.map((star) => (
-                                    <Pressable
-                                        key={star}
-                                        style={styles.starButton}
-                                        onPress={() => setRating(star)}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`${star} out of 5 stars`}
-                                        accessibilityState={{ selected: rating === star }}
-                                    >
-                                        <Text style={[styles.star, star > rating && styles.emptyStar]}>
-                                            {star <= rating ? '★' : '☆'}
-                                        </Text>
-                                    </Pressable>
-                                ))}
-                            </View>
+                    {loading && <ActivityIndicator size="large" color="#946A00" accessibilityLabel="Loading review form" />}
+                    {loadError ? (
+                        <View style={styles.status}>
+                            <Text style={styles.error} accessibilityRole="alert">{loadError}</Text>
+                            <Pressable style={styles.saveButton} onPress={() => setAttempt(current => current + 1)} accessibilityRole="button">
+                                <Text style={styles.saveButtonText}>Try again</Text>
+                            </Pressable>
                         </View>
-
-                        <View>
-                            <Text style={styles.label}>Comment</Text>
-                            <TextInput
-                                style={styles.commentInput}
-                                value={comment}
-                                onChangeText={setComment}
-                                placeholder="Share your experience with this product"
-                                placeholderTextColor="#999999"
-                                multiline
-                                autoCapitalize="sentences"
-                                accessibilityLabel="Comment"
-                            />
-                        </View>
-
-                        <View style={styles.photoSection}>
-                            {imageUrl && (
-                                <View style={styles.photoFrame}>
-                                    <Image
-                                        source={imageUrl}
-                                        style={styles.reviewImage}
-                                        resizeMode="contain"
-                                        accessibilityLabel="Alex Morgan's review photo"
-                                    />
+                    ) : null}
+                    {ready && <>
+                        <View style={styles.form}>
+                            <View>
+                                <Text style={styles.label}>Your rating</Text>
+                                <View style={styles.stars}>
+                                    {stars.map((star) => (
+                                        <Pressable
+                                            key={star}
+                                            style={styles.starButton}
+                                            disabled={submitting}
+                                            onPress={() => setRating(star)}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`${star} out of 5 stars`}
+                                            accessibilityState={{ selected: star === rating, disabled: submitting }}
+                                        >
+                                            <Text style={[styles.star, star > rating && styles.emptyStar]}>
+                                                {star <= rating ? '★' : '☆'}
+                                            </Text>
+                                        </Pressable>
+                                    ))}
                                 </View>
-                            )}
-                            <View style={styles.photoButton}>
-                                <Text style={styles.photoButtonText}>
-                                    {imageUrl ? 'Change photo' : 'Add photo (optional)'}
-                                </Text>
                             </View>
-                        </View>
-                    </View>
 
-                    <Pressable style={styles.saveButton} onPress={handleSave} accessibilityRole="button">
-                        <Text style={styles.saveButtonText}>
-                            {isEditing ? 'Save changes' : 'Post review'}
-                        </Text>
-                    </Pressable>
+                            <View>
+                                <Text style={styles.label}>Comment</Text>
+                                <TextInput
+                                    style={styles.commentInput}
+                                    value={comment}
+                                    editable={!submitting}
+                                    onChangeText={setComment}
+                                    placeholder="Share your experience with this product"
+                                    placeholderTextColor="#999999"
+                                    multiline
+                                    autoCapitalize="sentences"
+                                    accessibilityLabel="Comment"
+                                />
+                            </View>
+
+                            <Text style={styles.label}>Photo uploads are not available yet.</Text>
+                        </View>
+
+                        {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+                        <Pressable style={[styles.saveButton, submitting && styles.disabledButton]} onPress={handleSave} disabled={submitting} accessibilityRole="button" accessibilityState={{ disabled: submitting, busy: submitting }}>
+                            <Text style={styles.saveButtonText}>
+                                {submitting ? 'Saving...' : isEditing ? 'Save changes' : 'Post review'}
+                            </Text>
+                        </Pressable>
+                    </>}
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -132,6 +218,18 @@ export default function ReviewFormScreen() {
 }
 
 const styles = StyleSheet.create({
+    status: {
+        gap: 12,
+    },
+    error: {
+        marginTop: 16,
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#B42318',
+    },
+    disabledButton: {
+        opacity: 0.65,
+    },
     screen: {
         flex: 1,
         backgroundColor: '#FFFFFF',
@@ -210,29 +308,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         textAlignVertical: 'top',
     },
-    photoSection: {
-        alignItems: 'flex-start',
-        gap: 12,
-    },
-    photoFrame: {
-        width: '72%',
-        height: 140,
-        padding: 8,
-        borderRadius: 10,
-        backgroundColor: '#F6F6F6',
-    },
-    reviewImage: {
-        width: '100%',
-        height: '100%',
-    },
-    photoButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderWidth: 1,
-        borderColor: '#D5D5D5',
-        borderRadius: 8,
-    },
-    photoButtonText: {
+    backLink: {
         fontSize: 14,
         fontWeight: '600',
         color: '#946A00',

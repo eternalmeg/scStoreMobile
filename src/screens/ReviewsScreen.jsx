@@ -1,10 +1,9 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useLocalSearchParams } from 'expo-router';
-import { products } from '../data/products';
-import { reviews } from '../data/reviews';
-
-const currentUserId = 'alex-morgan';
+import { Link, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useAuth } from '../context/useAuth';
+import * as reviewService from '../services/reviewService';
 
 const stars = [1, 2, 3, 4, 5];
 
@@ -22,11 +21,95 @@ function RatingStars({ rating }) {
 
 export default function ReviewsScreen() {
     const { productId, productName } = useLocalSearchParams();
-    const product = products.find(item => item.id === productId);
-    let name = '';
-    if (typeof productName === 'string') name = productName;
-    if (product) name = product.name;
-    if (typeof productId !== 'string' || !name.trim()) {
+    const isFocused = useIsFocused();
+    const { user, token } = useAuth();
+    const [product, setProduct] = useState(null);
+    const [reviews, setReviews] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [deleteError, setDeleteError] = useState('');
+    const [deletingId, setDeletingId] = useState('');
+    const [attempt, setAttempt] = useState(0);
+    const deletePending = useRef('');
+    const operationId = useRef(0);
+    const validProductId = typeof productId === 'string' && /^[a-f\d]{24}$/i.test(productId);
+
+    useEffect(() => {
+        if (!isFocused) return;
+        let active = true;
+        operationId.current += 1;
+        deletePending.current = '';
+
+        async function loadReviews() {
+            setLoading(true);
+            setError('');
+            setDeleteError('');
+            setDeletingId('');
+            setProduct(null);
+            setReviews([]);
+            try {
+                if (!validProductId) return;
+                const result = await reviewService.getProductReviews(productId);
+                if (active) {
+                    setProduct(result.product);
+                    setReviews(result.reviews);
+                }
+            } catch (err) {
+                if (active) setError(err.message);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }
+
+        loadReviews();
+        return () => {
+            active = false;
+            operationId.current += 1;
+        };
+    }, [productId, validProductId, attempt, isFocused]);
+
+    function confirmDelete(review) {
+        if (deletePending.current || !token || !user || (review.user?._id || review.user) !== user._id) return;
+        deletePending.current = 'confirm';
+        const id = operationId.current;
+        setDeletingId(review._id);
+        setDeleteError('');
+        Alert.alert('Delete review', 'Are you sure you want to delete this review?', [
+            {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                    if (id !== operationId.current) return;
+                    deletePending.current = '';
+                    setDeletingId('');
+                },
+            },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    if (deletePending.current !== 'confirm' || id !== operationId.current) return;
+                    deletePending.current = 'delete';
+                    try {
+                        await reviewService.deleteReview(review._id, token);
+                        if (id === operationId.current) {
+                            setReviews(current => current.filter(item => item._id !== review._id));
+                            setAttempt(current => current + 1);
+                        }
+                    } catch (err) {
+                        if (id === operationId.current) setDeleteError(err.message);
+                    } finally {
+                        if (id === operationId.current) {
+                            deletePending.current = '';
+                            setDeletingId('');
+                        }
+                    }
+                },
+            },
+        ], { cancelable: false });
+    }
+
+    if (!validProductId) {
         return (
             <SafeAreaView style={[styles.screen, styles.content]} edges={['top', 'left', 'right']}>
                 <Text style={styles.headerTitle}>Product not found</Text>
@@ -34,11 +117,11 @@ export default function ReviewsScreen() {
             </SafeAreaView>
         );
     }
-    const productReviews = reviews.filter(item => item.productId === productId);
-    const sortedReviews = [...productReviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    let name = typeof productName === 'string' ? productName : '';
+    if (product) name = `${product.brand} ${product.model}`;
     let averageRating = 0;
-    if (productReviews.length > 0) {
-        averageRating = productReviews.reduce((sum, review) => sum + review.rating, 0) / productReviews.length;
+    if (reviews.length > 0) {
+        averageRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
     }
     return (
         <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -55,72 +138,88 @@ export default function ReviewsScreen() {
                 <Text style={styles.productName} accessibilityRole="header">
                     {name}
                 </Text>
-                <View style={styles.ratingSummary}>
-                    <RatingStars rating={averageRating} />
-                    <Text style={styles.averageRating}>{averageRating.toFixed(1)} / 5</Text>
-                    <Text style={styles.reviewCount}>{productReviews.length} reviews</Text>
-                </View>
+                {loading && <ActivityIndicator style={styles.status} size="large" color="#946A00" accessibilityLabel="Loading reviews" />}
+                {error ? (
+                    <View style={styles.status}>
+                        <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+                        <Pressable onPress={() => setAttempt(current => current + 1)} accessibilityRole="button" style={styles.retryButton}>
+                            <Text style={styles.writeButtonText}>Try again</Text>
+                        </Pressable>
+                    </View>
+                ) : null}
+                {!loading && !error && product && <>
+                    <View style={styles.ratingSummary}>
+                        <RatingStars rating={averageRating} />
+                        <Text style={styles.averageRating}>{averageRating.toFixed(1)} / 5</Text>
+                        <Text style={styles.reviewCount}>{reviews.length} reviews</Text>
+                    </View>
 
-                <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name } }} asChild>
-                    <Pressable style={styles.writeButton} accessibilityRole="button">
-                        <Text style={styles.writeButtonText}>Write a review</Text>
-                    </Pressable>
-                </Link>
+                    <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name } }} asChild>
+                        <Pressable style={styles.writeButton} disabled={Boolean(deletingId) || !token} accessibilityRole="button">
+                            <Text style={styles.writeButtonText}>Write a review</Text>
+                        </Pressable>
+                    </Link>
 
-                {productReviews.length === 0 && <Text style={styles.comment}>Reviews are not connected yet. This screen uses demo data.</Text>}
+                    {deleteError ? <Text style={styles.error} accessibilityRole="alert">{deleteError} You can try deleting again.</Text> : null}
+                    {reviews.length === 0 && <Text style={styles.comment}>No reviews yet. Be the first to write a review.</Text>}
 
-                <View>
-                    {sortedReviews.map((review) => (
-                        <View key={review._id} style={styles.reviewRow}>
-                            <View style={styles.avatar}>
-                                {review.user.avatarUrl ? (
-                                    <Image
-                                        source={{ uri: review.user.avatarUrl }}
-                                        style={styles.avatarImage}
-                                        accessibilityLabel={`${review.user.firstName} ${review.user.lastName} avatar`}
-                                    />
-                                ) : (
+                    <View>
+                        {reviews.map((review) => (
+                            <View key={review._id} style={styles.reviewRow}>
+                                <View style={styles.avatar}>
                                     <Text style={styles.avatarInitials}>
-                                        {review.user.firstName[0]}{review.user.lastName[0]}
+                                        {review.user?.firstName?.[0] || '?'}{review.user?.lastName?.[0] || ''}
                                     </Text>
-                                )}
-                            </View>
-
-                            <View style={styles.reviewContent}>
-                                <Text style={styles.authorName}>
-                                    {review.user.firstName} {review.user.lastName}
-                                </Text>
-                                <View style={styles.reviewMeta}>
-                                    <RatingStars rating={review.rating} />
-                                    <Text style={styles.reviewDate}>{review.createdAt}</Text>
                                 </View>
-                                <Text style={styles.comment}>{review.comment}</Text>
-                                {review.imageUrl && (
-                                    <View style={styles.reviewImageFrame}>
-                                        <Image
-                                            source={typeof review.imageUrl === 'string' ? { uri: review.imageUrl } : review.imageUrl}
-                                            style={styles.reviewImage}
-                                            resizeMode="contain"
-                                            accessibilityLabel={`${product.name} review photo`}
-                                        />
+
+                                <View style={styles.reviewContent}>
+                                    <Text style={styles.authorName}>
+                                        {[review.user?.firstName, review.user?.lastName].filter(Boolean).join(' ') || 'Customer'}
+                                    </Text>
+                                    <View style={styles.reviewMeta}>
+                                        <RatingStars rating={review.rating} />
+                                        <Text style={styles.reviewDate}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}</Text>
                                     </View>
-                                )}
-                                {review.user._id === currentUserId && (
-                                    <View style={styles.reviewActions}>
-                                        <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name, reviewId: review._id } }} style={styles.edit}>Edit</Link>
-                                        <Text style={styles.delete}>Delete</Text>
-                                    </View>
-                                )}
+                                    <Text style={styles.comment}>{review.comment}</Text>
+                                    {user && (review.user?._id || review.user) === user._id && (
+                                        <View style={styles.reviewActions}>
+                                            <Link href={{ pathname: '/catalog/[productId]/review-form', params: { productId, productName: name, reviewId: review._id } }} asChild>
+                                                <Pressable disabled={Boolean(deletingId)} accessibilityRole="button" hitSlop={8}>
+                                                    <Text style={styles.edit}>Edit</Text>
+                                                </Pressable>
+                                            </Link>
+                                            <Pressable onPress={() => confirmDelete(review)} disabled={Boolean(deletingId)} accessibilityRole="button" hitSlop={8}>
+                                                <Text style={styles.delete}>{deletingId === review._id ? 'Deleting...' : 'Delete'}</Text>
+                                            </Pressable>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
-                        </View>
-                    ))}
-                </View>
+                        ))}
+                    </View>
+                </>}
             </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    status: {
+        gap: 16,
+        paddingVertical: 24,
+    },
+    error: {
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#B42318',
+    },
+    retryButton: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#222222',
+    },
     screen: {
         flex: 1,
         backgroundColor: '#FFFFFF',
@@ -217,11 +316,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#F0ECE3',
     },
-    avatarImage: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-    },
     avatarInitials: {
         fontSize: 14,
         fontWeight: '700',
@@ -252,18 +346,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#333333',
-    },
-    reviewImageFrame: {
-        width: '72%',
-        height: 140,
-        padding: 8,
-        marginTop: 12,
-        borderRadius: 10,
-        backgroundColor: '#F6F6F6',
-    },
-    reviewImage: {
-        width: '100%',
-        height: '100%',
     },
     reviewActions: {
         flexDirection: 'row',
